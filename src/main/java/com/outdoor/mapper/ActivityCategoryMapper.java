@@ -1,0 +1,12 @@
+package com.outdoor.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.outdoor.entity.ActivityCategory;
+import org.apache.ibatis.annotations.Mapper;
+
+/**
+ * 活动分类Mapper接口
+ */
+@Mapper
+public interface ActivityCategoryMapper extends BaseMapper<ActivityCategory> {
+}
