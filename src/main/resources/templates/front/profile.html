@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户主页 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+    <style>
+        .profile-header { background: linear-gradient(135deg, #a5d6a7 0%, #81c784 100%); padding: 40px 0; }
+        .profile-card { display: flex; align-items: center; gap: 30px; }
+        .profile-avatar { width: 120px; height: 120px; border-radius: 50%; border: 4px solid #fff; object-fit: cover; }
+        .profile-info { flex: 1; color: #fff; }
+        .profile-name { font-size: 28px; font-weight: 600; margin-bottom: 10px; }
+        .profile-bio { opacity: 0.9; margin-bottom: 15px; }
+        .profile-stats { display: flex; gap: 30px; }
+        .profile-stat { text-align: center; }
+        .profile-stat-num { font-size: 24px; font-weight: 600; }
+        .profile-stat-label { font-size: 14px; opacity: 0.8; }
+        .profile-actions { display: flex; gap: 10px; }
+        .profile-actions .btn { min-width: 100px; }
+        .profile-content { padding: 30px 0; }
+        .profile-tabs { display: flex; gap: 30px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); }
+        .profile-tab { padding: 10px 0; cursor: pointer; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+        .profile-tab.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand"><span>户外运动社交平台</span></a>
+            <ul class="navbar-menu">
+                <li><a href="/">首页</a></li>
+                <li><a href="/activities">活动</a></li>
+                <li><a href="/moments">动态</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser"></div>
+        </div>
+    </nav>
+
+    <div class="profile-header">
+        <div class="container">
+            <div class="profile-card" id="profileCard">
+                <div class="loading" style="color: #fff;">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container profile-content">
+        <div class="profile-tabs">
+            <div class="profile-tab active" data-tab="moments" onclick="switchTab('moments')">动态</div>
+            <div class="profile-tab" data-tab="activities" onclick="switchTab('activities')">参与的活动</div>
+        </div>
+
+        <div id="momentsPanel">
+            <div id="momentList"></div>
+            <div id="momentPagination"></div>
+        </div>
+
+        <div id="activitiesPanel" style="display: none;">
+            <div class="activity-grid" id="activityList"></div>
+            <div id="activityPagination"></div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="#">关于我们</a>
+                    <a href="#">联系方式</a>
+                    <a href="#">用户协议</a>
+                    <a href="#">隐私政策</a>
+                </div>
+                <div class="footer-copyright">&copy; 2026 户外运动社交平台 版权所有</div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        const profileUserId = window.location.pathname.split('/').pop();
+        let currentUserId = null;
+        let currentTab = 'moments';
+        let momentPage = 1, activityPage = 1;
+        const pageSize = 10;
+        let profileUser = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCurrentUser();
+            loadProfile();
+            loadMoments(1);
+        });
+
+        async function loadCurrentUser() {
+            const res = await get('/api/current-user');
+            if (res && res.code === 200 && res.data) {
+                const user = res.data;
+                currentUserId = user.id;
+                document.getElementById('navbarUser').innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${user.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            ${user.role >= 2 ? '<a href="/organizer/center">发起者中心</a>' : ''}
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                document.getElementById('navbarUser').innerHTML = `
+                    <a href="/login" class="btn btn-primary btn-small">登录</a>
+                `;
+            }
+        }
+
+        async function loadProfile() {
+            const res = await get(`/api/front/user/${profileUserId}/profile`);
+            if (res && res.code === 200 && res.data) {
+                profileUser = res.data;
+                const u = profileUser;
+                const isSelf = currentUserId && currentUserId == profileUserId;
+                
+                document.getElementById('profileCard').innerHTML = `
+                    <img src="${u.avatar || getDefaultAvatar()}" class="profile-avatar" alt="">
+                    <div class="profile-info">
+                        <div class="profile-name">${u.nickname || '用户' + u.id}</div>
+                        <div class="profile-bio">${u.bio || '这个人很懒，什么都没写~'}</div>
+                        <div class="profile-stats">
+                            <div class="profile-stat">
+                                <div class="profile-stat-num">${u.momentCount || 0}</div>
+                                <div class="profile-stat-label">动态</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-actions">
+                        ${isSelf ? `
+                            <a href="/user/center" class="btn" style="background: rgba(255,255,255,0.2); color: #fff;">编辑资料</a>
+                        ` : ''}
+                    </div>
+                `;
+                
+                document.title = (u.nickname || '用户') + ' - 户外运动社交平台';
+            } else {
+                document.getElementById('profileCard').innerHTML = '<div style="color: #fff;">用户不存在</div>';
+            }
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.profile-tab[data-tab="${tab}"]`).classList.add('active');
+            document.getElementById('momentsPanel').style.display = tab === 'moments' ? 'block' : 'none';
+            document.getElementById('activitiesPanel').style.display = tab === 'activities' ? 'block' : 'none';
+            if (tab === 'activities') loadActivities(1);
+        }
+
+        async function loadMoments(page) {
+            momentPage = page;
+            const res = await get(`/api/front/user/${profileUserId}/moments?page=${page}&size=${pageSize}`);
+            const container = document.getElementById('momentList');
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                if (!data.records || data.records.length === 0) {
+                    container.innerHTML = '<div class="empty">暂无动态</div>';
+                    document.getElementById('momentPagination').innerHTML = '';
+                    return;
+                }
+                
+                container.innerHTML = data.records.map(m => {
+                    let imagesHtml = '';
+                    if (m.imageList && m.imageList.length > 0) {
+                        imagesHtml = `<div class="moment-images ${m.imageList.length === 1 ? 'single' : ''}">${m.imageList.map(img => `<img src="${getImageUrl(img)}" alt="">`).join('')}</div>`;
+                    }
+                    return `
+                        <div class="moment-card">
+                            <div class="moment-header">
+                                <img src="${profileUser?.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                                <div class="moment-user-info">
+                                    <div class="moment-user-name">${profileUser?.nickname || '用户'}</div>
+                                    <div class="moment-time">${timeAgo(m.createdTime)}</div>
+                                </div>
+                            </div>
+                            <div class="moment-content">${m.content || ''}</div>
+                            ${imagesHtml}
+                            <div class="moment-actions">
+                                <span class="moment-action ${m.isLiked ? 'active' : ''}" onclick="toggleLike(${m.id}, this)">
+                                    <span>${m.isLiked ? '已赞' : '点赞'}</span> ${m.likeCount || 0}
+                                </span>
+                                <span class="moment-action">评论 ${m.commentCount || 0}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                document.getElementById('momentPagination').innerHTML = renderPagination(data.current, data.total, pageSize, 'loadMoments');
+            }
+        }
+
+        async function loadActivities(page) {
+            activityPage = page;
+            const res = await get(`/api/front/user/${profileUserId}/activities?page=${page}&size=${pageSize}`);
+            const container = document.getElementById('activityList');
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                if (!data.records || data.records.length === 0) {
+                    container.innerHTML = '<div class="empty" style="grid-column: 1/-1;">暂无参与的活动</div>';
+                    document.getElementById('activityPagination').innerHTML = '';
+                    return;
+                }
+                
+                container.innerHTML = data.records.map(a => `
+                    <a href="/activity/${a.id}" class="activity-card">
+                        <div class="activity-card-cover">
+                            <img src="${getImageUrl(a.coverImage)}" alt="">
+                        </div>
+                        <div class="activity-card-body">
+                            <div class="activity-card-title">${a.title}</div>
+                            <div class="activity-card-info">${formatDate(a.startTime)}</div>
+                            <div class="activity-card-info">${a.location || '待定'}</div>
+                        </div>
+                    </a>
+                `).join('');
+                
+                document.getElementById('activityPagination').innerHTML = renderPagination(data.current, data.total, pageSize, 'loadActivities');
+            }
+        }
+
+        async function toggleLike(momentId, el) {
+            if (!currentUserId) {
+                window.location.href = '/login';
+                return;
+            }
+            const res = await post(`/api/moment/${momentId}/like`);
+            if (res && res.code === 200) {
+                loadMoments(momentPage);
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

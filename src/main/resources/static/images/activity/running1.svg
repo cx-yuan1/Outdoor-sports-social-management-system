@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" fill="none">
+  <rect width="400" height="300" fill="#fce4ec"/>
+  <rect y="230" width="400" height="70" fill="#f8bbd9"/>
+  <circle cx="50" cy="50" r="25" fill="#7b1fa2" opacity="0.3"/>
+  <circle cx="350" cy="80" r="20" fill="#7b1fa2" opacity="0.2"/>
+  <circle cx="200" cy="100" r="25" fill="#e91e63"/>
+  <path d="M180 130c10 0 30 10 40 30l30 50-40 20-20-30-30 40-40-20 40-70c5-10 10-20 20-20z" fill="#e91e63"/>
+  <path d="M250 210l40 30M160 220l-40 60M200 240l20 60" stroke="#e91e63" stroke-width="6" stroke-linecap="round"/>
+  <text x="200" y="280" text-anchor="middle" font-family="Arial" font-size="20" fill="#880e4f" font-weight="bold">夜跑团</text>
+</svg>

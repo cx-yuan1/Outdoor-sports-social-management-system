@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分类管理 - 管理后台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="admin-sidebar">
+            <div class="admin-logo"><span>管理后台</span></div>
+            <nav class="admin-menu">
+                <a href="/admin" class="admin-menu-item">数据概览</a>
+                <a href="/admin/users" class="admin-menu-item">用户管理</a>
+                <a href="/admin/activities" class="admin-menu-item">活动管理</a>
+                <a href="/admin/categories" class="admin-menu-item active">分类管理</a>
+                <a href="/admin/moments" class="admin-menu-item">动态管理</a>
+                <a href="/admin/banners" class="admin-menu-item">轮播图管理</a>
+                <a href="/admin/notices" class="admin-menu-item">公告管理</a>
+            </nav>
+        </aside>
+
+        <main class="admin-main">
+            <header class="admin-header">
+                <h1 class="admin-header-title">分类管理</h1>
+                <div class="admin-header-user">
+                    <span id="adminName">管理员</span>
+                    <a href="javascript:logout()" class="btn btn-outline btn-small">退出</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="card">
+                    <div class="search-bar">
+                        <button class="btn btn-primary" onclick="openModal()">添加分类</button>
+                    </div>
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>序号</th>
+                                <th>图标</th>
+                                <th>名称</th>
+                                <th>排序</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="7" class="loading">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 编辑弹窗 -->
+    <div class="modal-overlay" id="editModal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title" id="modalTitle">添加分类</span>
+                <span class="modal-close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="categoryId">
+                <div class="form-group">
+                    <label class="form-label">分类名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-input" id="categoryName" placeholder="请输入分类名称">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">图标</label>
+                    <input type="hidden" id="categoryIcon">
+                    <input type="file" id="iconFile" accept="image/*" style="display: none;" onchange="uploadIcon(this)">
+                    <div class="icon-upload-box" id="iconUploadBox" onclick="document.getElementById('iconFile').click()">
+                        <div class="upload-placeholder" id="iconPlaceholder">
+                            <span class="upload-icon">+</span>
+                            <span class="upload-text">上传图标</span>
+                        </div>
+                        <div class="image-preview-wrapper" id="iconPreviewWrapper" style="display: none;">
+                            <img id="iconPreview" src="">
+                            <span class="image-delete-btn" onclick="deleteIcon(event)">&times;</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">排序</label>
+                    <input type="number" class="form-input" id="categorySort" placeholder="数字越小越靠前" value="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">状态</label>
+                    <select class="form-input" id="categoryStatus">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveCategory()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        // 存储分类数据，用于编辑时获取
+        let categoriesData = [];
+        
+        // 使用事件委托处理按钮点击
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCategories();
+            
+            // 使用事件委托，绑定到tbody上
+            const tbody = document.getElementById('tableBody');
+            if (tbody) {
+                tbody.addEventListener('click', function(e) {
+                    const btn = e.target.closest('button[data-action]');
+                    if (!btn) return;
+                    
+                    const action = btn.getAttribute('data-action');
+                    const id = parseInt(btn.getAttribute('data-id'));
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    if (action === 'edit') {
+                        editCategory(id);
+                    } else if (action === 'delete') {
+                        deleteCategory(id);
+                    }
+                });
+            }
+        });
+
+        async function loadCategories() {
+            const res = await get('/api/admin/categories');
+            const tbody = document.getElementById('tableBody');
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                categoriesData = data; // 保存数据
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无数据</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.map((c, index) => `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${c.icon ? `<img src="${c.icon}" class="thumb-img" style="width:40px;height:40px;" alt="">` : '-'}</td>
+                        <td>${c.name}</td>
+                        <td>${c.sort || 0}</td>
+                        <td><span class="status-tag ${c.status === 1 ? 'status-normal' : 'status-disabled'}">${c.status === 1 ? '启用' : '禁用'}</span></td>
+                        <td>${formatDateTime(c.createdTime)}</td>
+                        <td>
+                            <div class="action-btns">
+                                <button class="btn btn-primary btn-small" data-action="edit" data-id="${c.id}">编辑</button>
+                                <button class="btn btn-danger btn-small" data-action="delete" data-id="${c.id}">删除</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty">加载失败</td></tr>';
+            }
+        }
+
+        function openModal() {
+            document.getElementById('modalTitle').textContent = '添加分类';
+            document.getElementById('categoryId').value = '';
+            document.getElementById('categoryName').value = '';
+            document.getElementById('categoryIcon').value = '';
+            document.getElementById('categorySort').value = '0';
+            document.getElementById('categoryStatus').value = '1';
+            // 重置图标上传区域
+            document.getElementById('iconPreviewWrapper').style.display = 'none';
+            document.getElementById('iconPlaceholder').style.display = 'flex';
+            document.getElementById('iconFile').value = '';
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function editCategory(id) {
+            if (!id) {
+                showMessage('参数错误', 'error');
+                return;
+            }
+            
+            // 从保存的数据中查找
+            const category = categoriesData.find(c => c.id === id);
+            if (!category) {
+                showMessage('数据不存在', 'error');
+                return;
+            }
+            
+            document.getElementById('modalTitle').textContent = '编辑分类';
+            document.getElementById('categoryId').value = category.id;
+            document.getElementById('categoryName').value = category.name || '';
+            document.getElementById('categoryIcon').value = category.icon || '';
+            document.getElementById('categorySort').value = category.sort || 0;
+            document.getElementById('categoryStatus').value = category.status;
+            
+            // 重置文件输入
+            document.getElementById('iconFile').value = '';
+            
+            // 设置图标预览
+            if (category.icon) {
+                document.getElementById('iconPreview').src = category.icon;
+                document.getElementById('iconPreviewWrapper').style.display = 'block';
+                document.getElementById('iconPlaceholder').style.display = 'none';
+            } else {
+                document.getElementById('iconPreviewWrapper').style.display = 'none';
+                document.getElementById('iconPlaceholder').style.display = 'flex';
+            }
+            
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        async function uploadIcon(input) {
+            if (input.files && input.files[0]) {
+                const url = await uploadFile(input.files[0]);
+                if (url) {
+                    document.getElementById('categoryIcon').value = url;
+                    document.getElementById('iconPreview').src = url;
+                    document.getElementById('iconPreviewWrapper').style.display = 'block';
+                    document.getElementById('iconPlaceholder').style.display = 'none';
+                }
+            }
+        }
+
+        // 删除图标
+        function deleteIcon(event) {
+            event.stopPropagation(); // 阻止事件冒泡，避免触发上传
+            document.getElementById('categoryIcon').value = '';
+            document.getElementById('iconFile').value = '';
+            document.getElementById('iconPreviewWrapper').style.display = 'none';
+            document.getElementById('iconPlaceholder').style.display = 'flex';
+        }
+
+        async function saveCategory() {
+            const id = document.getElementById('categoryId').value;
+            const name = document.getElementById('categoryName').value.trim();
+            const icon = document.getElementById('categoryIcon').value.trim();
+            const sort = parseInt(document.getElementById('categorySort').value) || 0;
+            const status = parseInt(document.getElementById('categoryStatus').value);
+            
+            if (!name) {
+                showMessage('请输入分类名称', 'error');
+                return;
+            }
+            
+            const data = { name, icon, sort, status };
+            let res;
+            
+            try {
+                if (id) {
+                    res = await put(`/api/admin/category/${id}`, data);
+                } else {
+                    res = await post('/api/admin/category', data);
+                }
+                
+                if (res && res.code === 200) {
+                    showMessage('保存成功');
+                    closeModal();
+                    loadCategories();
+                } else {
+                    showMessage(res ? res.message : '保存失败', 'error');
+                }
+            } catch (error) {
+                console.error('保存失败:', error);
+                showMessage('保存失败，请稍后重试', 'error');
+            }
+        }
+
+        async function deleteCategory(id) {
+            if (!id) {
+                showMessage('参数错误', 'error');
+                return;
+            }
+            
+            if (!confirm('确定要删除该分类吗？')) return;
+            
+            try {
+                const res = await del(`/api/admin/category/${id}`);
+                if (res && res.code === 200) {
+                    showMessage('删除成功');
+                    loadCategories();
+                } else {
+                    showMessage(res ? res.message : '删除失败', 'error');
+                }
+            } catch (error) {
+                showMessage('删除失败，请稍后重试', 'error');
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/admin/login';
+        }
+    </script>
+</body>
+</html>

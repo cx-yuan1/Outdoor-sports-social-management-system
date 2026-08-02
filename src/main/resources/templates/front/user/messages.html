@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的消息 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+    <style>
+        .user-layout { display: flex; gap: 20px; padding: 30px 0; }
+        .user-sidebar { width: 200px; }
+        .user-main { flex: 1; }
+        .user-menu { background: #fff; border-radius: 8px; overflow: hidden; }
+        .user-menu a { display: block; padding: 15px 20px; color: var(--text-color); border-left: 3px solid transparent; }
+        .user-menu a:hover, .user-menu a.active { background: #e8f5e9; color: var(--primary-color); border-left-color: var(--primary-color); }
+        .message-tabs { display: flex; background: #fff; border-radius: 8px 8px 0 0; border-bottom: 1px solid var(--border-color); }
+        .message-tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: var(--text-secondary); }
+        .message-tab.active { color: var(--primary-color); border-bottom: 2px solid var(--primary-color); }
+        .message-list { background: #fff; border-radius: 0 0 8px 8px; }
+        .message-item { display: flex; gap: 15px; padding: 15px 20px; border-bottom: 1px solid var(--border-color); }
+        .message-item:hover { background: #f9f9f9; }
+        .message-item:last-child { border-bottom: none; }
+        .message-item.unread { background: #f0f7f0; }
+        .message-icon { width: 50px; height: 50px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 20px; flex-shrink: 0; }
+        .message-icon.system { background: #e8f5e9; color: var(--primary-color); }
+        .message-icon.activity { background: #fff3e0; color: #ff9800; }
+        .message-body { flex: 1; min-width: 0; }
+        .message-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .message-title { font-weight: 600; color: var(--text-color); }
+        .message-time { font-size: 12px; color: var(--text-light); }
+        .message-content { color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand"><span>户外运动社交平台</span></a>
+            <ul class="navbar-menu">
+                <li><a href="/">首页</a></li>
+                <li><a href="/activities">活动</a></li>
+                <li><a href="/moments">动态</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser"></div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="user-layout">
+            <aside class="user-sidebar">
+                <nav class="user-menu">
+                    <a href="/user/center">个人资料</a>
+                    <a href="/user/signups">我的报名</a>
+                    <a href="/user/moments">我的动态</a>
+                    <a href="/user/messages" class="active">我的消息</a>
+                </nav>
+            </aside>
+
+            <main class="user-main">
+                <div class="message-tabs">
+                    <div class="message-tab active" data-type="system" onclick="switchTab('system')">系统通知</div>
+                    <div class="message-tab" data-type="activity" onclick="switchTab('activity')">活动通知</div>
+                </div>
+                <div class="message-list" id="messageList">
+                    <div class="loading" style="padding: 40px;">加载中...</div>
+                </div>
+                <div id="pagination" style="padding: 20px; background: #fff; border-radius: 0 0 8px 8px;"></div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        let currentPage = 1;
+        let currentType = 'system';
+        const pageSize = 10;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadMessages(1);
+        });
+
+        async function loadUserInfo() {
+            const res = await get('/api/current-user');
+            if (res && res.code === 200 && res.data) {
+                const user = res.data;
+                document.getElementById('navbarUser').innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${user.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            ${user.role >= 2 ? '<a href="/organizer/center">发起者中心</a>' : ''}
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                window.location.href = '/login';
+            }
+        }
+
+        function switchTab(type) {
+            currentType = type;
+            document.querySelectorAll('.message-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.message-tab[data-type="${type}"]`).classList.add('active');
+            loadMessages(1);
+        }
+
+        async function loadMessages(page) {
+            currentPage = page;
+            const container = document.getElementById('messageList');
+            
+            // 消息类型：system=2, activity=3
+            const typeMap = { 'system': 2, 'activity': 3 };
+            const typeValue = typeMap[currentType] || 2;
+            
+            const res = await get(`/api/user/messages?type=${typeValue}&page=${page}&size=${pageSize}`);
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                if (!data.records || data.records.length === 0) {
+                    container.innerHTML = `<div class="empty" style="padding: 60px;">暂无${currentType === 'system' ? '系统' : '活动'}通知</div>`;
+                    document.getElementById('pagination').innerHTML = '';
+                    return;
+                }
+                
+                container.innerHTML = data.records.map(m => `
+                    <div class="message-item ${m.isRead === 0 ? 'unread' : ''}" onclick="markRead(${m.id})">
+                        <div class="message-icon ${currentType}">
+                            ${currentType === 'system' ? '📢' : '🎯'}
+                        </div>
+                        <div class="message-body">
+                            <div class="message-header">
+                                <span class="message-title">${m.title || (currentType === 'system' ? '系统通知' : '活动通知')}</span>
+                                <span class="message-time">${timeAgo(m.createdTime)}</span>
+                            </div>
+                            <div class="message-content">${m.content || ''}</div>
+                        </div>
+                    </div>
+                `).join('');
+                
+                document.getElementById('pagination').innerHTML = renderPagination(data.current, data.total, pageSize, 'loadMessages');
+            } else {
+                container.innerHTML = '<div class="empty" style="padding: 60px;">加载失败</div>';
+            }
+        }
+
+        async function markRead(id) {
+            await post(`/api/user/message/${id}/read`);
+            loadMessages(currentPage);
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

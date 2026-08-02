@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发起者中心 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+    <style>
+        .organizer-layout { display: flex; gap: 20px; padding: 30px 0; }
+        .organizer-sidebar { width: 200px; }
+        .organizer-main { flex: 1; }
+        .organizer-menu { background: #fff; border-radius: 8px; overflow: hidden; }
+        .organizer-menu a { display: block; padding: 15px 20px; color: var(--text-color); border-left: 3px solid transparent; }
+        .organizer-menu a:hover, .organizer-menu a.active { background: #e8f5e9; color: var(--primary-color); border-left-color: var(--primary-color); }
+        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+        .stat-item { background: #fff; border-radius: 8px; padding: 20px; text-align: center; }
+        .stat-item h3 { font-size: 28px; color: var(--primary-color); margin-bottom: 5px; }
+        .stat-item p { color: var(--text-secondary); font-size: 14px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand"><span>户外运动社交平台</span></a>
+            <ul class="navbar-menu">
+                <li><a href="/">首页</a></li>
+                <li><a href="/activities">活动</a></li>
+                <li><a href="/moments">动态</a></li>
+                <li><a href="/notices">公告</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser"></div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="organizer-layout">
+            <aside class="organizer-sidebar">
+                <nav class="organizer-menu">
+                    <a href="/organizer/center" class="active">数据概览</a>
+                    <a href="/organizer/publish">发布活动</a>
+                    <a href="/organizer/activities">我的活动</a>
+                </nav>
+            </aside>
+
+            <main class="organizer-main">
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <h3 id="totalCount">0</h3>
+                        <p>活动总数</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="pendingCount">0</h3>
+                        <p>待审核</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="approvedCount">0</h3>
+                        <p>已通过</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="finishedCount">0</h3>
+                        <p>已结束</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">快捷操作</h3>
+                    <div class="flex gap-20">
+                        <a href="/organizer/publish" class="btn btn-primary">发布新活动</a>
+                        <a href="/organizer/activities" class="btn btn-outline">管理我的活动</a>
+                    </div>
+                </div>
+
+                <div class="card mt-20">
+                    <h3 class="card-title">最近活动</h3>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>活动名称</th>
+                                <th>状态</th>
+                                <th>报名人数</th>
+                                <th>活动时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentActivities">
+                            <tr><td colspan="5" class="loading">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadStatistics();
+            loadRecentActivities();
+        });
+
+        async function loadUserInfo() {
+            const res = await get('/api/current-user');
+            if (res && res.code === 200 && res.data) {
+                currentUser = res.data;
+                document.getElementById('navbarUser').innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${currentUser.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            <a href="/organizer/center">发起者中心</a>
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                window.location.href = '/login';
+            }
+        }
+
+        async function loadStatistics() {
+            const res = await get('/api/organizer/statistics');
+            if (res && res.code === 200) {
+                document.getElementById('totalCount').textContent = res.data.totalCount || 0;
+                document.getElementById('pendingCount').textContent = res.data.pendingCount || 0;
+                document.getElementById('approvedCount').textContent = res.data.approvedCount || 0;
+                document.getElementById('finishedCount').textContent = res.data.finishedCount || 0;
+            }
+        }
+
+        async function loadRecentActivities() {
+            const res = await get('/api/organizer/activities?page=1&size=5');
+            const tbody = document.getElementById('recentActivities');
+            
+            if (res && res.code === 200) {
+                const activities = res.data.records;
+                if (activities.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无活动</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = activities.map(a => `
+                    <tr>
+                        <td>${a.title}</td>
+                        <td><span class="status-tag ${getActivityStatusClass(a.status)}">${getActivityStatusText(a.status)}</span></td>
+                        <td>${a.currentParticipants || 0}${a.maxParticipants > 0 ? '/' + a.maxParticipants : ''}</td>
+                        <td>${formatDateTime(a.startTime)}</td>
+                        <td><a href="/organizer/activity/${a.id}" class="btn btn-primary btn-small">管理</a></td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

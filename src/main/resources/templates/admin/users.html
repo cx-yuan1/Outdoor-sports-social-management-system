@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - 管理后台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <style>
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .toolbar-btns {
+            display: flex;
+            gap: 10px;
+        }
+        .avatar-upload {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .avatar-preview {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #e0e0e0;
+            background: #f5f5f5;
+        }
+        .avatar-upload-btn {
+            position: relative;
+            overflow: hidden;
+        }
+        .avatar-upload-btn input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- 侧边栏 -->
+        <aside class="admin-sidebar">
+            <div class="admin-logo"><span>管理后台</span></div>
+            <nav class="admin-menu">
+                <a href="/admin" class="admin-menu-item">数据概览</a>
+                <a href="/admin/users" class="admin-menu-item active">用户管理</a>
+                <a href="/admin/activities" class="admin-menu-item">活动管理</a>
+                <a href="/admin/categories" class="admin-menu-item">分类管理</a>
+                <a href="/admin/moments" class="admin-menu-item">动态管理</a>
+                <a href="/admin/banners" class="admin-menu-item">轮播图管理</a>
+                <a href="/admin/notices" class="admin-menu-item">公告管理</a>
+            </nav>
+        </aside>
+
+        <main class="admin-main">
+            <header class="admin-header">
+                <h1 class="admin-header-title">用户管理</h1>
+                <div class="admin-header-user">
+                    <span id="adminName">管理员</span>
+                    <a href="javascript:logout()" class="btn btn-outline btn-small">退出</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="card">
+                    <!-- 工具栏 -->
+                    <div class="toolbar">
+                        <div class="toolbar-btns">
+                            <button class="btn btn-primary" onclick="openAddModal(1)">添加用户</button>
+                            <button class="btn btn-primary" onclick="openAddModal(2)">添加活动发起者</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 搜索栏 -->
+                    <div class="search-bar">
+                        <input type="text" class="form-input" id="keyword" placeholder="搜索用户名/昵称/手机号">
+                        <select id="roleFilter">
+                            <option value="">全部角色</option>
+                            <option value="1">普通用户</option>
+                            <option value="2">活动发起者</option>
+                            <option value="3">管理员</option>
+                        </select>
+                        <select id="statusFilter">
+                            <option value="">全部状态</option>
+                            <option value="1">正常</option>
+                            <option value="0">禁用</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadUsers(1)">搜索</button>
+                    </div>
+
+                    <!-- 表格 -->
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>序号</th>
+                                <th>头像</th>
+                                <th>用户名</th>
+                                <th>昵称</th>
+                                <th>手机号</th>
+                                <th>角色</th>
+                                <th>状态</th>
+                                <th>注册时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="9" class="loading">加载中...</td></tr>
+                        </tbody>
+                    </table>
+
+                    <!-- 分页 -->
+                    <div id="pagination"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 添加用户弹窗 -->
+    <div class="modal" id="addModal">
+        <div class="modal-content" style="width: 500px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">添加用户</h3>
+                <span class="modal-close" onclick="closeAddModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="addForm">
+                    <input type="hidden" id="addRole" value="1">
+                    
+                    <!-- 头像上传 -->
+                    <div class="form-group">
+                        <label class="form-label">头像</label>
+                        <div class="avatar-upload">
+                            <img id="avatarPreview" class="avatar-preview" src="/static/images/default-avatar.png" alt="头像预览">
+                            <div class="avatar-upload-btn btn btn-outline">
+                                选择图片
+                                <input type="file" accept="image/*" onchange="uploadAvatar(this)">
+                            </div>
+                        </div>
+                        <input type="hidden" id="addAvatar" value="">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">用户名 <span style="color:#e57373">*</span></label>
+                        <input type="text" class="form-input" id="addUsername" placeholder="请输入用户名（3-20个字符）" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">密码 <span style="color:#e57373">*</span></label>
+                        <input type="password" class="form-input" id="addPassword" placeholder="请输入密码（至少6位）" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">昵称</label>
+                        <input type="text" class="form-input" id="addNickname" placeholder="请输入昵称">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">手机号</label>
+                        <input type="text" class="form-input" id="addPhone" placeholder="请输入手机号">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">邮箱</label>
+                        <input type="email" class="form-input" id="addEmail" placeholder="请输入邮箱">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">性别</label>
+                        <select class="form-input" id="addGender">
+                            <option value="0">未知</option>
+                            <option value="1">男</option>
+                            <option value="2">女</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">个人简介</label>
+                        <textarea class="form-input" id="addIntro" rows="3" placeholder="请输入个人简介"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeAddModal()">取消</button>
+                <button class="btn btn-primary" onclick="submitAdd()">确定添加</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        let currentPage = 1;
+        const pageSize = 10;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUsers(1);
+            
+            // 使用事件委托，绑定到tbody上
+            const tbody = document.getElementById('tableBody');
+            if (tbody) {
+                tbody.addEventListener('click', function(e) {
+                    const btn = e.target.closest('[data-action]');
+                    if (!btn) return;
+                    
+                    const action = btn.getAttribute('data-action');
+                    const id = parseInt(btn.getAttribute('data-id'));
+                    const status = parseInt(btn.getAttribute('data-status') || '0');
+                    
+                    if (action === 'updateStatus') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        updateStatus(id, status);
+                    }
+                });
+            }
+        });
+
+        async function loadUsers(page) {
+            currentPage = page;
+            const keyword = document.getElementById('keyword').value.trim();
+            const role = document.getElementById('roleFilter').value;
+            const status = document.getElementById('statusFilter').value;
+            
+            let url = `/api/admin/users?page=${page}&size=${pageSize}`;
+            if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`;
+            if (role) url += `&role=${role}`;
+            if (status) url += `&status=${status}`;
+            
+            const res = await get(url);
+            const tbody = document.getElementById('tableBody');
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                
+                if (data.records.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="empty">暂无数据</td></tr>';
+                    document.getElementById('pagination').innerHTML = '';
+                    return;
+                }
+                
+                tbody.innerHTML = data.records.map((u, index) => `
+                    <tr>
+                        <td>${(currentPage - 1) * pageSize + index + 1}</td>
+                        <td><img src="${u.avatar || getDefaultAvatar()}" class="thumb-img" style="width:40px;height:40px;border-radius:50%;" alt=""></td>
+                        <td>${u.username}</td>
+                        <td>${u.nickname || '-'}</td>
+                        <td>${u.phone || '-'}</td>
+                        <td>${getRoleText(u.role)}</td>
+                        <td><span class="status-tag ${u.status === 1 ? 'status-normal' : 'status-disabled'}">${u.status === 1 ? '正常' : '禁用'}</span></td>
+                        <td>${formatDateTime(u.createdTime)}</td>
+                        <td>
+                            <div class="action-btns">
+                                ${u.status === 1 
+                                    ? `<button class="btn btn-danger btn-small" data-action="updateStatus" data-id="${u.id}" data-status="0">禁用</button>`
+                                    : `<button class="btn btn-primary btn-small" data-action="updateStatus" data-id="${u.id}" data-status="1">启用</button>`
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('pagination').innerHTML = renderPagination(
+                    data.current, data.total, pageSize, 'loadUsers'
+                );
+            } else {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty">加载失败</td></tr>';
+            }
+        }
+
+        async function updateStatus(id, status) {
+            const action = status === 1 ? '启用' : '禁用';
+            if (!confirm(`确定要${action}该用户吗？`)) return;
+            
+            const res = await put(`/api/admin/user/${id}/status`, { status });
+            if (res && res.code === 200) {
+                showMessage(`${action}成功`);
+                loadUsers(currentPage);
+            } else {
+                showMessage(res ? res.message : '操作失败', 'error');
+            }
+        }
+
+        // 打开添加弹窗
+        function openAddModal(role) {
+            document.getElementById('addRole').value = role;
+            document.getElementById('modalTitle').textContent = role === 1 ? '添加用户' : '添加活动发起者';
+            // 重置表单
+            document.getElementById('addForm').reset();
+            document.getElementById('addAvatar').value = '';
+            document.getElementById('avatarPreview').src = getDefaultAvatar();
+            document.getElementById('addModal').classList.add('show');
+        }
+
+        // 关闭添加弹窗
+        function closeAddModal() {
+            document.getElementById('addModal').classList.remove('show');
+        }
+
+        // 上传头像
+        async function uploadAvatar(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            const file = input.files[0];
+            // 检查文件大小（限制2MB）
+            if (file.size > 2 * 1024 * 1024) {
+                showMessage('图片大小不能超过2MB', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('type', 'avatar');
+            
+            try {
+                const res = await fetch('/api/common/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    document.getElementById('addAvatar').value = data.data;
+                    document.getElementById('avatarPreview').src = data.data;
+                    showMessage('头像上传成功');
+                } else {
+                    showMessage(data.message || '上传失败', 'error');
+                }
+            } catch (e) {
+                showMessage('上传失败', 'error');
+            }
+        }
+
+        // 提交添加
+        async function submitAdd() {
+            const username = document.getElementById('addUsername').value.trim();
+            const password = document.getElementById('addPassword').value;
+            const nickname = document.getElementById('addNickname').value.trim();
+            const phone = document.getElementById('addPhone').value.trim();
+            const email = document.getElementById('addEmail').value.trim();
+            const gender = parseInt(document.getElementById('addGender').value);
+            const intro = document.getElementById('addIntro').value.trim();
+            const avatar = document.getElementById('addAvatar').value;
+            const role = parseInt(document.getElementById('addRole').value);
+            
+            // 验证
+            if (!username) {
+                showMessage('请输入用户名', 'error');
+                return;
+            }
+            if (username.length < 3 || username.length > 20) {
+                showMessage('用户名长度应为3-20个字符', 'error');
+                return;
+            }
+            if (!password) {
+                showMessage('请输入密码', 'error');
+                return;
+            }
+            if (password.length < 6) {
+                showMessage('密码长度不能少于6位', 'error');
+                return;
+            }
+            if (phone && !/^1[3-9]\d{9}$/.test(phone)) {
+                showMessage('手机号格式不正确', 'error');
+                return;
+            }
+            
+            const userData = {
+                username,
+                password,
+                nickname: nickname || username,
+                phone: phone || null,
+                email: email || null,
+                gender,
+                intro: intro || null,
+                avatar: avatar || null,
+                role
+            };
+            
+            const res = await post('/api/admin/user', userData);
+            if (res && res.code === 200) {
+                showMessage('添加成功');
+                closeAddModal();
+                loadUsers(1);
+            } else {
+                showMessage(res ? res.message : '添加失败', 'error');
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html>

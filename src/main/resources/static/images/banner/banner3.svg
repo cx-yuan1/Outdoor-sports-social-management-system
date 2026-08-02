@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" fill="none">
+  <rect width="800" height="300" fill="#e3f2fd"/>
+  <path d="M0 250h800v50H0z" fill="#90caf9"/>
+  <path d="M0 250c50-10 100 5 150-5s100 10 150-5 100 15 150 0 100 10 150-5 100 15 100 15v50H0z" fill="#64b5f6"/>
+  <circle cx="150" cy="200" r="35" stroke="#1976d2" stroke-width="8" fill="none"/>
+  <circle cx="280" cy="200" r="35" stroke="#1976d2" stroke-width="8" fill="none"/>
+  <path d="M150 200l50-60h30l20 30-30 30H150z" stroke="#1976d2" stroke-width="5" fill="none"/>
+  <path d="M200 140l80 60" stroke="#1976d2" stroke-width="5"/>
+  <circle cx="200" cy="120" r="15" fill="#1976d2"/>
+  <circle cx="100" cy="60" r="30" fill="#fff"/>
+  <circle cx="130" cy="55" r="25" fill="#fff"/>
+  <circle cx="160" cy="65" r="20" fill="#fff"/>
+  <text x="550" y="180" text-anchor="middle" font-family="Arial" font-size="32" fill="#1565c0" font-weight="bold">骑行季来临</text>
+  <text x="550" y="220" text-anchor="middle" font-family="Arial" font-size="18" fill="#1976d2">一起感受风的自由</text>
+</svg>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的动态 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+    <style>
+        .user-layout { display: flex; gap: 20px; padding: 30px 0; }
+        .user-sidebar { width: 200px; }
+        .user-main { flex: 1; }
+        .user-menu { background: #fff; border-radius: 8px; overflow: hidden; }
+        .user-menu a { display: block; padding: 15px 20px; color: var(--text-color); border-left: 3px solid transparent; }
+        .user-menu a:hover, .user-menu a.active { background: #e8f5e9; color: var(--primary-color); border-left-color: var(--primary-color); }
+        .publish-box { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .publish-box textarea { width: 100%; border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; min-height: 80px; resize: none; }
+        .publish-images { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .publish-images .img-item { width: 80px; height: 80px; position: relative; }
+        .publish-images .img-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
+        .publish-images .img-item .remove { position: absolute; top: -5px; right: -5px; width: 20px; height: 20px; background: var(--danger-color); color: #fff; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 12px; }
+        .publish-images .add-btn { width: 80px; height: 80px; border: 2px dashed var(--border-color); border-radius: 4px; display: flex; justify-content: center; align-items: center; cursor: pointer; color: var(--text-light); font-size: 24px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand"><span>户外运动社交平台</span></a>
+            <ul class="navbar-menu">
+                <li><a href="/">首页</a></li>
+                <li><a href="/activities">活动</a></li>
+                <li><a href="/moments">动态</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser"></div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="user-layout">
+            <aside class="user-sidebar">
+                <nav class="user-menu">
+                    <a href="/user/center">个人资料</a>
+                    <a href="/user/signups">我的报名</a>
+                    <a href="/user/moments" class="active">我的动态</a>
+                    <a href="/user/messages">我的消息</a>
+                </nav>
+            </aside>
+
+            <main class="user-main">
+                <!-- 发布动态 -->
+                <div class="publish-box">
+                    <textarea id="momentContent" placeholder="分享你的户外运动故事..."></textarea>
+                    <div class="publish-images" id="imagePreview">
+                        <input type="file" id="imageFile" accept="image/*" multiple style="display: none;" onchange="handleImageSelect(this)">
+                        <div class="add-btn" onclick="document.getElementById('imageFile').click()">+</div>
+                    </div>
+                    <div class="flex-between mt-10">
+                        <span class="text-secondary text-small">最多可上传9张图片</span>
+                        <button class="btn btn-primary" onclick="publishMoment()">发布动态</button>
+                    </div>
+                </div>
+
+                <!-- 动态列表 -->
+                <div id="momentList">
+                    <div class="loading">加载中...</div>
+                </div>
+
+                <div id="pagination"></div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        let currentPage = 1;
+        const pageSize = 10;
+        let uploadedImages = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadMoments(1);
+        });
+
+        async function loadUserInfo() {
+            const res = await get('/api/current-user');
+            if (res && res.code === 200 && res.data) {
+                const user = res.data;
+                document.getElementById('navbarUser').innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${user.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            ${user.role >= 2 ? '<a href="/organizer/center">发起者中心</a>' : ''}
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                window.location.href = '/login';
+            }
+        }
+
+        async function handleImageSelect(input) {
+            if (input.files) {
+                for (let file of input.files) {
+                    if (uploadedImages.length >= 9) {
+                        showMessage('最多上传9张图片', 'warning');
+                        break;
+                    }
+                    const url = await uploadFile(file, 'common');
+                    if (url) {
+                        uploadedImages.push(url);
+                    }
+                }
+                renderImagePreview();
+            }
+        }
+
+        function renderImagePreview() {
+            const container = document.getElementById('imagePreview');
+            let html = uploadedImages.map((url, i) => `
+                <div class="img-item">
+                    <img src="${url}" alt="">
+                    <span class="remove" onclick="removeImage(${i})">x</span>
+                </div>
+            `).join('');
+            
+            if (uploadedImages.length < 9) {
+                html += `<div class="add-btn" onclick="document.getElementById('imageFile').click()">+</div>`;
+            }
+            
+            container.innerHTML = html;
+        }
+
+        function removeImage(index) {
+            uploadedImages.splice(index, 1);
+            renderImagePreview();
+        }
+
+        async function publishMoment() {
+            const content = document.getElementById('momentContent').value.trim();
+            
+            if (!content && uploadedImages.length === 0) {
+                showMessage('请输入内容或上传图片', 'warning');
+                return;
+            }
+            
+            const res = await post('/api/user/moment', {
+                content: content,
+                images: uploadedImages.join(',')
+            });
+            
+            if (res && res.code === 200) {
+                showMessage('发布成功，等待审核');
+                document.getElementById('momentContent').value = '';
+                uploadedImages = [];
+                renderImagePreview();
+                loadMoments(1);
+            } else {
+                showMessage(res ? res.message : '发布失败', 'error');
+            }
+        }
+
+        async function loadMoments(page) {
+            currentPage = page;
+            const res = await get(`/api/user/moments?page=${page}&size=${pageSize}`);
+            const container = document.getElementById('momentList');
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                
+                if (data.records.length === 0) {
+                    container.innerHTML = '<div class="empty">暂无动态</div>';
+                    document.getElementById('pagination').innerHTML = '';
+                    return;
+                }
+                
+                container.innerHTML = data.records.map(m => {
+                    const statusMap = {0: '待审核', 1: '已通过', 2: '已拒绝'};
+                    const statusClass = {0: 'status-pending', 1: 'status-approved', 2: 'status-rejected'};
+                    let imagesHtml = '';
+                    if (m.imageList && m.imageList.length > 0) {
+                        imagesHtml = `<div class="moment-images ${m.imageList.length === 1 ? 'single' : ''}">${m.imageList.map(img => `<img src="${getImageUrl(img)}" alt="">`).join('')}</div>`;
+                    }
+                    
+                    return `
+                        <div class="moment-card">
+                            <div class="flex-between">
+                                <span class="moment-time">${timeAgo(m.createdTime)}</span>
+                                <span class="status-tag ${statusClass[m.status]}">${statusMap[m.status]}</span>
+                            </div>
+                            <div class="moment-content" style="margin: 15px 0;">${m.content || ''}</div>
+                            ${imagesHtml}
+                            <div class="flex-between" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                                <span class="text-secondary">点赞 ${m.likeCount || 0} | 评论 ${m.commentCount || 0}</span>
+                                <button class="btn btn-danger btn-small" onclick="deleteMoment(${m.id})">删除</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                document.getElementById('pagination').innerHTML = renderPagination(
+                    data.current, data.total, pageSize, 'loadMoments'
+                );
+            } else {
+                container.innerHTML = '<div class="empty">加载失败</div>';
+            }
+        }
+
+        async function deleteMoment(id) {
+            if (!confirm('确定要删除这条动态吗？')) return;
+            
+            const res = await del(`/api/user/moment/${id}`);
+            if (res && res.code === 200) {
+                showMessage('删除成功');
+                loadMoments(currentPage);
+            } else {
+                showMessage(res ? res.message : '删除失败', 'error');
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

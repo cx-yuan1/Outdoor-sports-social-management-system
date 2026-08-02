@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>轮播图管理 - 管理后台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="admin-sidebar">
+            <div class="admin-logo"><span>管理后台</span></div>
+            <nav class="admin-menu">
+                <a href="/admin" class="admin-menu-item">数据概览</a>
+                <a href="/admin/users" class="admin-menu-item">用户管理</a>
+                <a href="/admin/activities" class="admin-menu-item">活动管理</a>
+                <a href="/admin/categories" class="admin-menu-item">分类管理</a>
+                <a href="/admin/moments" class="admin-menu-item">动态管理</a>
+                <a href="/admin/banners" class="admin-menu-item active">轮播图管理</a>
+                <a href="/admin/notices" class="admin-menu-item">公告管理</a>
+            </nav>
+        </aside>
+
+        <main class="admin-main">
+            <header class="admin-header">
+                <h1 class="admin-header-title">轮播图管理</h1>
+                <div class="admin-header-user">
+                    <span id="adminName">管理员</span>
+                    <a href="javascript:logout()" class="btn btn-outline btn-small">退出</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="card">
+                    <div class="search-bar">
+                        <button class="btn btn-primary" onclick="openModal()">添加轮播图</button>
+                    </div>
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>序号</th>
+                                <th>图片</th>
+                                <th>标题</th>
+                                <th>排序</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="7" class="loading">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 编辑弹窗 -->
+    <div class="modal-overlay" id="editModal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title" id="modalTitle">添加轮播图</span>
+                <span class="modal-close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="bannerId">
+                <div class="form-group">
+                    <label class="form-label">标题</label>
+                    <input type="text" class="form-input" id="bannerTitle" placeholder="请输入标题">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">图片 <span class="text-danger">*</span></label>
+                    <input type="hidden" id="bannerImage">
+                    <input type="file" id="imageFile" accept="image/*" style="display: none;" onchange="uploadImage(this)">
+                    <div class="image-upload-box" id="imageUploadBox" onclick="document.getElementById('imageFile').click()">
+                        <div class="upload-placeholder" id="uploadPlaceholder">
+                            <span class="upload-icon">+</span>
+                            <span class="upload-text">点击上传图片</span>
+                        </div>
+                        <div class="image-preview-wrapper" id="imagePreviewWrapper" style="display: none;">
+                            <img id="imagePreview" src="">
+                            <span class="image-delete-btn" onclick="deleteImage(event)">&times;</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">排序</label>
+                    <input type="number" class="form-input" id="bannerSort" placeholder="数字越小越靠前" value="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">状态</label>
+                    <select class="form-input" id="bannerStatus">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveBanner()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        // 存储轮播图数据，用于编辑时获取
+        let bannersData = [];
+        
+        // 使用事件委托处理按钮点击
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBanners();
+            
+            // 使用事件委托，绑定到tbody上
+            const tbody = document.getElementById('tableBody');
+            if (tbody) {
+                tbody.addEventListener('click', function(e) {
+                    const btn = e.target.closest('[data-action]');
+                    if (!btn) return;
+                    
+                    const action = btn.getAttribute('data-action');
+                    const id = parseInt(btn.getAttribute('data-id'));
+                    
+                    if (action === 'edit') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        editBanner(id);
+                    } else if (action === 'delete') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteBanner(id);
+                    }
+                });
+            }
+        });
+
+        async function loadBanners() {
+            const res = await get('/api/admin/banners');
+            const tbody = document.getElementById('tableBody');
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                bannersData = data; // 保存数据
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无数据</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.map((b, index) => `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td><img src="${getImageUrl(b.image)}" class="thumb-img" style="width:100px;height:50px;" alt=""></td>
+                        <td>${b.title || '-'}</td>
+                        <td>${b.sort || 0}</td>
+                        <td><span class="status-tag ${b.status === 1 ? 'status-normal' : 'status-disabled'}">${b.status === 1 ? '启用' : '禁用'}</span></td>
+                        <td>${formatDateTime(b.createdTime)}</td>
+                        <td>
+                            <div class="action-btns">
+                                <button class="btn btn-primary btn-small" data-action="edit" data-id="${b.id}">编辑</button>
+                                <button class="btn btn-danger btn-small" data-action="delete" data-id="${b.id}">删除</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty">加载失败</td></tr>';
+            }
+        }
+
+        function openModal() {
+            document.getElementById('modalTitle').textContent = '添加轮播图';
+            document.getElementById('bannerId').value = '';
+            document.getElementById('bannerTitle').value = '';
+            document.getElementById('bannerImage').value = '';
+            document.getElementById('bannerSort').value = '0';
+            document.getElementById('bannerStatus').value = '1';
+            // 重置图片上传区域
+            document.getElementById('uploadPlaceholder').style.display = 'flex';
+            document.getElementById('imagePreviewWrapper').style.display = 'none';
+            document.getElementById('imageFile').value = '';
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function editBanner(id) {
+            // 从保存的数据中查找
+            const banner = bannersData.find(b => b.id === id);
+            if (!banner) {
+                showMessage('数据不存在', 'error');
+                return;
+            }
+            
+            document.getElementById('modalTitle').textContent = '编辑轮播图';
+            document.getElementById('bannerId').value = banner.id;
+            document.getElementById('bannerTitle').value = banner.title || '';
+            document.getElementById('bannerImage').value = banner.image || '';
+            document.getElementById('bannerSort').value = banner.sort || 0;
+            document.getElementById('bannerStatus').value = banner.status;
+            
+            // 重置文件输入
+            document.getElementById('imageFile').value = '';
+            
+            // 显示图片预览
+            if (banner.image) {
+                document.getElementById('imagePreview').src = getImageUrl(banner.image);
+                document.getElementById('uploadPlaceholder').style.display = 'none';
+                document.getElementById('imagePreviewWrapper').style.display = 'block';
+            } else {
+                document.getElementById('uploadPlaceholder').style.display = 'flex';
+                document.getElementById('imagePreviewWrapper').style.display = 'none';
+            }
+            
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        // 删除图片
+        function deleteImage(event) {
+            event.stopPropagation();
+            document.getElementById('bannerImage').value = '';
+            document.getElementById('imageFile').value = '';
+            document.getElementById('uploadPlaceholder').style.display = 'flex';
+            document.getElementById('imagePreviewWrapper').style.display = 'none';
+        }
+
+        async function uploadImage(input) {
+            if (input.files && input.files[0]) {
+                const url = await uploadFile(input.files[0]);
+                if (url) {
+                    document.getElementById('bannerImage').value = url;
+                    document.getElementById('imagePreview').src = url;
+                    document.getElementById('uploadPlaceholder').style.display = 'none';
+                    document.getElementById('imagePreviewWrapper').style.display = 'block';
+                }
+            }
+        }
+
+        async function saveBanner() {
+            const id = document.getElementById('bannerId').value;
+            const title = document.getElementById('bannerTitle').value.trim();
+            const image = document.getElementById('bannerImage').value.trim();
+            const sort = parseInt(document.getElementById('bannerSort').value) || 0;
+            const status = parseInt(document.getElementById('bannerStatus').value);
+            
+            if (!image) {
+                showMessage('请上传图片', 'error');
+                return;
+            }
+            
+            const data = { title, image, sort, status };
+            let res;
+            
+            try {
+                if (id) {
+                    res = await put(`/api/admin/banner/${id}`, data);
+                } else {
+                    res = await post('/api/admin/banner', data);
+                }
+                
+                if (res && res.code === 200) {
+                    showMessage('保存成功');
+                    closeModal();
+                    loadBanners();
+                } else {
+                    showMessage(res ? res.message : '保存失败', 'error');
+                }
+            } catch (error) {
+                console.error('保存失败:', error);
+                showMessage('保存失败，请稍后重试', 'error');
+            }
+        }
+
+        async function deleteBanner(id) {
+            if (!id) {
+                showMessage('参数错误', 'error');
+                return;
+            }
+            
+            if (!confirm('确定要删除该轮播图吗？')) return;
+            
+            try {
+                const res = await del(`/api/admin/banner/${id}`);
+                if (res && res.code === 200) {
+                    showMessage('删除成功');
+                    loadBanners();
+                } else {
+                    showMessage(res ? res.message : '删除失败', 'error');
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+                showMessage('删除失败，请稍后重试', 'error');
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/admin/login';
+        }
+    </script>
+</body>
+</html>

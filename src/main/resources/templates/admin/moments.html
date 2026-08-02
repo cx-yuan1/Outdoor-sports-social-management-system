@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动态管理 - 管理后台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="admin-sidebar">
+            <div class="admin-logo"><span>管理后台</span></div>
+            <nav class="admin-menu">
+                <a href="/admin" class="admin-menu-item">数据概览</a>
+                <a href="/admin/users" class="admin-menu-item">用户管理</a>
+                <a href="/admin/activities" class="admin-menu-item">活动管理</a>
+                <a href="/admin/categories" class="admin-menu-item">分类管理</a>
+                <a href="/admin/moments" class="admin-menu-item active">动态管理</a>
+                <a href="/admin/banners" class="admin-menu-item">轮播图管理</a>
+                <a href="/admin/notices" class="admin-menu-item">公告管理</a>
+            </nav>
+        </aside>
+
+        <main class="admin-main">
+            <header class="admin-header">
+                <h1 class="admin-header-title">动态管理</h1>
+                <div class="admin-header-user">
+                    <span id="adminName">管理员</span>
+                    <a href="javascript:logout()" class="btn btn-outline btn-small">退出</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="card">
+                    <div class="search-bar">
+                        <select id="statusFilter">
+                            <option value="">全部状态</option>
+                            <option value="0">待审核</option>
+                            <option value="1">已通过</option>
+                            <option value="2">已拒绝</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="loadMoments(1)">搜索</button>
+                    </div>
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>序号</th>
+                                <th>用户</th>
+                                <th>内容</th>
+                                <th>图片</th>
+                                <th>点赞/评论</th>
+                                <th>状态</th>
+                                <th>发布时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="8" class="loading">加载中...</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div id="pagination"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 审核弹窗 -->
+    <div class="modal-overlay" id="auditModal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">审核动态</span>
+                <span class="modal-close" onclick="closeAuditModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">审核结果</label>
+                    <select class="form-input" id="auditStatus">
+                        <option value="1">通过</option>
+                        <option value="2">拒绝</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">审核备注</label>
+                    <textarea class="form-input form-textarea" id="auditRemark" placeholder="选填"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeAuditModal()">取消</button>
+                <button class="btn btn-primary" onclick="submitAudit()">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        let currentPage = 1;
+        const pageSize = 10;
+        let auditMomentId = null;
+
+        // 使用事件委托处理按钮点击
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMoments(1);
+            
+            // 使用事件委托，绑定到tbody上
+            const tbody = document.getElementById('tableBody');
+            if (tbody) {
+                tbody.addEventListener('click', function(e) {
+                    const btn = e.target.closest('[data-action]');
+                    if (!btn) return;
+                    
+                    const action = btn.getAttribute('data-action');
+                    const id = parseInt(btn.getAttribute('data-id'));
+                    
+                    if (action === 'audit') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openAuditModal(id);
+                    } else if (action === 'delete') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteMoment(id);
+                    }
+                });
+            }
+        });
+
+        async function loadMoments(page) {
+            currentPage = page;
+            const status = document.getElementById('statusFilter').value;
+            
+            let url = `/api/admin/moments?page=${page}&size=${pageSize}`;
+            if (status) url += `&status=${status}`;
+            
+            const res = await get(url);
+            const tbody = document.getElementById('tableBody');
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                
+                if (data.records.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无数据</td></tr>';
+                    document.getElementById('pagination').innerHTML = '';
+                    return;
+                }
+                
+                tbody.innerHTML = data.records.map((m, index) => {
+                    const statusMap = {0: '待审核', 1: '已通过', 2: '已拒绝'};
+                    const statusClass = {0: 'status-pending', 1: 'status-approved', 2: 'status-rejected'};
+                    const content = m.content ? (m.content.length > 50 ? m.content.substring(0, 50) + '...' : m.content) : '-';
+                    const images = m.images ? m.images.split(',').slice(0, 3) : [];
+                    
+                    return `
+                        <tr>
+                            <td>${(currentPage - 1) * pageSize + index + 1}</td>
+                            <td>${m.userName || '-'}</td>
+                            <td style="max-width: 200px;">${content}</td>
+                            <td>
+                                ${images.length > 0 ? images.map(img => `<img src="${getImageUrl(img)}" class="thumb-img" style="width:40px;height:40px;margin:2px;" alt="">`).join('') : '-'}
+                            </td>
+                            <td>${m.likeCount || 0} / ${m.commentCount || 0}</td>
+                            <td><span class="status-tag ${statusClass[m.status]}">${statusMap[m.status]}</span></td>
+                            <td>${formatDateTime(m.createdTime)}</td>
+                            <td>
+                                <div class="action-btns">
+                                    ${m.status === 0 ? `<button class="btn btn-primary btn-small" data-action="audit" data-id="${m.id}">审核</button>` : ''}
+                                    <button class="btn btn-danger btn-small" data-action="delete" data-id="${m.id}">删除</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                document.getElementById('pagination').innerHTML = renderPagination(
+                    data.current, data.total, pageSize, 'loadMoments'
+                );
+            } else {
+                tbody.innerHTML = '<tr><td colspan="8" class="empty">加载失败</td></tr>';
+            }
+        }
+
+        function openAuditModal(id) {
+            auditMomentId = id;
+            document.getElementById('auditStatus').value = '1';
+            document.getElementById('auditRemark').value = '';
+            document.getElementById('auditModal').style.display = 'flex';
+        }
+
+        function closeAuditModal() {
+            document.getElementById('auditModal').style.display = 'none';
+            auditMomentId = null;
+        }
+
+        async function submitAudit() {
+            const status = parseInt(document.getElementById('auditStatus').value);
+            const remark = document.getElementById('auditRemark').value.trim();
+            
+            const res = await put(`/api/admin/moment/${auditMomentId}/audit`, { status, remark });
+            
+            if (res && res.code === 200) {
+                showMessage('审核成功');
+                closeAuditModal();
+                loadMoments(currentPage);
+            } else {
+                showMessage(res ? res.message : '操作失败', 'error');
+            }
+        }
+
+        async function deleteMoment(id) {
+            if (!id) {
+                showMessage('参数错误', 'error');
+                return;
+            }
+            
+            if (!confirm('确定要删除该动态吗？')) return;
+            
+            try {
+                const res = await del(`/api/admin/moment/${id}`);
+                if (res && res.code === 200) {
+                    showMessage('删除成功');
+                    loadMoments(currentPage);
+                } else {
+                    showMessage(res ? res.message : '删除失败', 'error');
+                }
+            } catch (error) {
+                console.error('删除失败:', error);
+                showMessage('删除失败，请稍后重试', 'error');
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/admin/login';
+        }
+    </script>
+</body>
+</html>

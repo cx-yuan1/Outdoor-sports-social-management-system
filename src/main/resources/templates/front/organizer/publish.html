@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发布活动 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+    <style>
+        .publish-layout { display: flex; gap: 20px; padding: 30px 0; }
+        .publish-sidebar { width: 200px; }
+        .publish-main { flex: 1; max-width: 800px; }
+        .publish-menu { background: #fff; border-radius: 8px; overflow: hidden; }
+        .publish-menu a { display: block; padding: 15px 20px; color: var(--text-color); border-left: 3px solid transparent; }
+        .publish-menu a:hover, .publish-menu a.active { background: #e8f5e9; color: var(--primary-color); border-left-color: var(--primary-color); }
+        .cover-upload { width: 100%; height: 200px; border: 2px dashed var(--border-color); border-radius: 8px; display: flex; justify-content: center; align-items: center; cursor: pointer; overflow: hidden; }
+        .cover-upload img { width: 100%; height: 100%; object-fit: cover; }
+        .cover-upload span { color: var(--text-secondary); }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand"><span>户外运动社交平台</span></a>
+            <ul class="navbar-menu">
+                <li><a href="/">首页</a></li>
+                <li><a href="/activities">活动</a></li>
+                <li><a href="/moments">动态</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser"></div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="publish-layout">
+            <aside class="publish-sidebar">
+                <nav class="publish-menu">
+                    <a href="/organizer/center">数据概览</a>
+                    <a href="/organizer/publish" class="active">发布活动</a>
+                    <a href="/organizer/activities">我的活动</a>
+                </nav>
+            </aside>
+
+            <main class="publish-main">
+                <div class="card">
+                    <h3 class="card-title">发布新活动</h3>
+                    <form id="publishForm">
+                        <div class="form-group">
+                            <label class="form-label">活动封面 <span class="text-danger">*</span></label>
+                            <div class="cover-upload" onclick="document.getElementById('coverFile').click()">
+                                <img id="coverPreview" src="" style="display: none;">
+                                <span id="coverText">点击上传封面图片</span>
+                            </div>
+                            <input type="file" id="coverFile" accept="image/*" style="display: none;" onchange="uploadCover(this)">
+                            <input type="hidden" id="coverImage">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">活动标题 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-input" id="title" placeholder="请输入活动标题" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">活动分类 <span class="text-danger">*</span></label>
+                            <select class="form-input" id="categoryId" required>
+                                <option value="">请选择分类</option>
+                            </select>
+                        </div>
+
+                        <div class="flex gap-20">
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label">开始时间 <span class="text-danger">*</span></label>
+                                <input type="datetime-local" class="form-input" id="startTime" required>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label">结束时间 <span class="text-danger">*</span></label>
+                                <input type="datetime-local" class="form-input" id="endTime" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">报名截止时间</label>
+                            <input type="datetime-local" class="form-input" id="signupDeadline">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">活动地点 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-input" id="location" placeholder="请输入活动地点" required>
+                        </div>
+
+                        <div class="flex gap-20">
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label">人数限制</label>
+                                <input type="number" class="form-input" id="maxParticipants" placeholder="0表示不限" value="0" min="0">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label">活动费用</label>
+                                <input type="number" class="form-input" id="fee" placeholder="0表示免费" value="0" min="0" step="0.01">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">联系电话</label>
+                            <input type="tel" class="form-input" id="contactPhone" placeholder="请输入联系电话">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">参与要求</label>
+                            <textarea class="form-input form-textarea" id="requirements" placeholder="请输入参与要求"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">活动详情 <span class="text-danger">*</span></label>
+                            <textarea class="form-input form-textarea" id="description" placeholder="请详细描述活动内容" style="min-height: 200px;" required></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 15px;">提交审核</button>
+                    </form>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadCategories();
+            
+            document.getElementById('publishForm').addEventListener('submit', handleSubmit);
+        });
+
+        async function loadUserInfo() {
+            const res = await get('/api/current-user');
+            if (res && res.code === 200 && res.data) {
+                const user = res.data;
+                document.getElementById('navbarUser').innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${user.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            <a href="/organizer/center">发起者中心</a>
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                window.location.href = '/login';
+            }
+        }
+
+        async function loadCategories() {
+            const res = await get('/api/front/categories');
+            if (res && res.code === 200) {
+                const select = document.getElementById('categoryId');
+                res.data.forEach(c => {
+                    const option = document.createElement('option');
+                    option.value = c.id;
+                    option.textContent = c.name;
+                    select.appendChild(option);
+                });
+            }
+        }
+
+        async function uploadCover(input) {
+            if (input.files && input.files[0]) {
+                const url = await uploadFile(input.files[0], 'activity');
+                if (url) {
+                    document.getElementById('coverImage').value = url;
+                    document.getElementById('coverPreview').src = url;
+                    document.getElementById('coverPreview').style.display = 'block';
+                    document.getElementById('coverText').style.display = 'none';
+                }
+            }
+        }
+
+        async function handleSubmit(e) {
+            e.preventDefault();
+            
+            const coverImage = document.getElementById('coverImage').value;
+            if (!coverImage) {
+                showMessage('请上传活动封面', 'error');
+                return;
+            }
+            
+            const data = {
+                coverImage: coverImage,
+                title: document.getElementById('title').value.trim(),
+                categoryId: parseInt(document.getElementById('categoryId').value),
+                startTime: document.getElementById('startTime').value,
+                endTime: document.getElementById('endTime').value,
+                signupDeadline: document.getElementById('signupDeadline').value || null,
+                location: document.getElementById('location').value.trim(),
+                maxParticipants: parseInt(document.getElementById('maxParticipants').value) || 0,
+                fee: parseFloat(document.getElementById('fee').value) || 0,
+                contactPhone: document.getElementById('contactPhone').value.trim(),
+                requirements: document.getElementById('requirements').value.trim(),
+                description: document.getElementById('description').value.trim()
+            };
+            
+            const res = await post('/api/organizer/activity', data);
+            
+            if (res && res.code === 200) {
+                showMessage('活动发布成功，等待审核');
+                setTimeout(() => {
+                    window.location.href = '/organizer/activities';
+                }, 1500);
+            } else {
+                showMessage(res ? res.message : '发布失败', 'error');
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

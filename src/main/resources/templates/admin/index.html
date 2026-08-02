@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- 侧边栏 -->
+        <aside class="admin-sidebar">
+            <div class="admin-logo">
+                <span>管理后台</span>
+            </div>
+            <nav class="admin-menu">
+                <a href="/admin" class="admin-menu-item active">数据概览</a>
+                <a href="/admin/users" class="admin-menu-item">用户管理</a>
+                <a href="/admin/activities" class="admin-menu-item">活动管理</a>
+                <a href="/admin/categories" class="admin-menu-item">分类管理</a>
+                <a href="/admin/moments" class="admin-menu-item">动态管理</a>
+                <a href="/admin/banners" class="admin-menu-item">轮播图管理</a>
+                <a href="/admin/notices" class="admin-menu-item">公告管理</a>
+            </nav>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="admin-main">
+            <header class="admin-header">
+                <h1 class="admin-header-title">数据概览</h1>
+                <div class="admin-header-user">
+                    <span id="adminName">管理员</span>
+                    <a href="javascript:logout()" class="btn btn-outline btn-small">退出</a>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <!-- 统计卡片 -->
+                <div class="stat-cards">
+                    <div class="stat-card">
+                        <div class="stat-card-info">
+                            <h3 id="userCount">0</h3>
+                            <p>用户总数</p>
+                        </div>
+                        <div class="stat-card-icon users">U</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-info">
+                            <h3 id="activityCount">0</h3>
+                            <p>活动总数</p>
+                        </div>
+                        <div class="stat-card-icon activities">A</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-info">
+                            <h3 id="momentCount">0</h3>
+                            <p>动态总数</p>
+                        </div>
+                        <div class="stat-card-icon moments">M</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-info">
+                            <h3 id="pendingCount">0</h3>
+                            <p>待处理</p>
+                        </div>
+                        <div class="stat-card-icon reports">P</div>
+                    </div>
+                </div>
+
+                <!-- 图表区域 -->
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <h3 class="chart-card-title">用户注册趋势（近7天）</h3>
+                        <div class="chart-container" id="userTrendChart"></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-card-title">活动分类统计</h3>
+                        <div class="chart-container" id="categoryChart"></div>
+                    </div>
+                </div>
+
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <h3 class="chart-card-title">活动状态分布</h3>
+                        <div class="chart-container" id="statusChart"></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3 class="chart-card-title">今日数据</h3>
+                        <div style="padding: 20px;">
+                            <div class="flex-between" style="padding: 15px 0; border-bottom: 1px solid var(--border-color);">
+                                <span>今日新增用户</span>
+                                <span id="todayUserCount" style="font-size: 24px; font-weight: 600; color: var(--primary-color);">0</span>
+                            </div>
+                            <div class="flex-between" style="padding: 15px 0; border-bottom: 1px solid var(--border-color);">
+                                <span>今日新增活动</span>
+                                <span id="todayActivityCount" style="font-size: 24px; font-weight: 600; color: var(--primary-color);">0</span>
+                            </div>
+                            <div class="flex-between" style="padding: 15px 0;">
+                                <span>待审核活动</span>
+                                <span id="pendingActivityCount" style="font-size: 24px; font-weight: 600; color: var(--warning-color);">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAdminInfo();
+            loadOverview();
+            loadUserTrend();
+            loadCategoryStats();
+            loadStatusStats();
+        });
+
+        async function loadAdminInfo() {
+            const res = await get('/api/current-user');
+            if (res && res.code === 200 && res.data) {
+                document.getElementById('adminName').textContent = res.data.nickname || res.data.username;
+            }
+        }
+
+        async function loadOverview() {
+            const res = await get('/api/admin/statistics/overview');
+            if (res && res.code === 200) {
+                const data = res.data;
+                document.getElementById('userCount').textContent = data.userCount || 0;
+                document.getElementById('activityCount').textContent = data.activityCount || 0;
+                document.getElementById('momentCount').textContent = data.momentCount || 0;
+                document.getElementById('pendingCount').textContent = (data.pendingActivityCount || 0) + (data.pendingReportCount || 0);
+                document.getElementById('todayUserCount').textContent = data.todayUserCount || 0;
+                document.getElementById('todayActivityCount').textContent = data.todayActivityCount || 0;
+                document.getElementById('pendingActivityCount').textContent = data.pendingActivityCount || 0;
+            }
+        }
+
+        async function loadUserTrend() {
+            const res = await get('/api/admin/statistics/user-trend');
+            if (res && res.code === 200) {
+                const data = res.data;
+                const chart = echarts.init(document.getElementById('userTrendChart'));
+                
+                chart.setOption({
+                    color: ['#7cb342'],
+                    tooltip: { trigger: 'axis' },
+                    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                    xAxis: {
+                        type: 'category',
+                        data: data.map(d => d.date)
+                    },
+                    yAxis: { type: 'value' },
+                    series: [{
+                        name: '新增用户',
+                        type: 'line',
+                        smooth: true,
+                        areaStyle: { opacity: 0.3 },
+                        data: data.map(d => d.count)
+                    }]
+                });
+            }
+        }
+
+        async function loadCategoryStats() {
+            const res = await get('/api/admin/statistics/activity-category');
+            if (res && res.code === 200) {
+                const data = res.data;
+                const chart = echarts.init(document.getElementById('categoryChart'));
+                
+                chart.setOption({
+                    color: ['#7cb342', '#42a5f5', '#ff7043', '#ab47bc', '#26a69a', '#ffca28', '#8d6e63', '#78909c'],
+                    tooltip: { trigger: 'item' },
+                    series: [{
+                        type: 'pie',
+                        radius: ['40%', '70%'],
+                        data: data,
+                        label: { formatter: '{b}: {c}' }
+                    }]
+                });
+            }
+        }
+
+        async function loadStatusStats() {
+            const res = await get('/api/admin/statistics/activity-status');
+            if (res && res.code === 200) {
+                const data = res.data;
+                const chart = echarts.init(document.getElementById('statusChart'));
+                
+                chart.setOption({
+                    color: ['#ffca28', '#7cb342', '#ef5350', '#42a5f5', '#9e9e9e', '#bdbdbd'],
+                    tooltip: { trigger: 'axis' },
+                    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                    xAxis: {
+                        type: 'category',
+                        data: data.map(d => d.name)
+                    },
+                    yAxis: { type: 'value' },
+                    series: [{
+                        type: 'bar',
+                        data: data.map(d => d.value),
+                        itemStyle: {
+                            color: function(params) {
+                                const colors = ['#ffca28', '#7cb342', '#ef5350', '#42a5f5', '#9e9e9e', '#bdbdbd'];
+                                return colors[params.dataIndex];
+                            }
+                        }
+                    }]
+                });
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/admin/login';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公告详情 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand"><span>户外运动社交平台</span></a>
+            <ul class="navbar-menu">
+                <li><a href="/">首页</a></li>
+                <li><a href="/activities">活动</a></li>
+                <li><a href="/moments">动态</a></li>
+                <li><a href="/notices" class="active">公告</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser"></div>
+        </div>
+    </nav>
+
+    <div class="container" style="padding-top: 30px; max-width: 800px;">
+        <div class="card" id="noticeDetail">
+            <div class="loading">加载中...</div>
+        </div>
+        <div style="margin-top: 20px;">
+            <a href="/notices" class="btn btn-outline">返回公告列表</a>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadNoticeDetail();
+        });
+
+        async function loadUserInfo() {
+            const res = await get('/api/current-user');
+            const container = document.getElementById('navbarUser');
+            if (res && res.code === 200 && res.data) {
+                container.innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${res.data.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <a href="/login" class="btn btn-outline btn-small">登录</a>
+                    <a href="/register" class="btn btn-primary btn-small">注册</a>
+                `;
+            }
+        }
+
+        async function loadNoticeDetail() {
+            const id = getPathId();
+            const res = await get(`/api/front/notice/${id}`);
+            const container = document.getElementById('noticeDetail');
+            
+            if (res && res.code === 200 && res.data) {
+                const notice = res.data;
+                document.title = notice.title + ' - 户外运动社交平台';
+                
+                container.innerHTML = `
+                    <h2 style="font-size: 22px; margin-bottom: 15px;">${notice.title}</h2>
+                    <div class="text-secondary" style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color);">
+                        <span class="tag ${notice.type === 2 ? 'tag-danger' : 'tag-info'}">${notice.type === 2 ? '重要公告' : '普通公告'}</span>
+                        <span style="margin-left: 15px;">发布时间：${formatDateTime(notice.createdTime)}</span>
+                    </div>
+                    <div style="line-height: 1.8; white-space: pre-wrap;">${notice.content}</div>
+                `;
+            } else {
+                container.innerHTML = '<div class="empty">公告不存在</div>';
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" fill="none">
+  <rect width="800" height="300" fill="#e8f5e9"/>
+  <path d="M0 200c100-50 200 0 300-30s200 20 300-10 200 40 200 40v100H0z" fill="#81c784"/>
+  <path d="M0 220c80-30 160 20 240-10s160 30 240 0 160 20 240 10 80 30 80 30v50H0z" fill="#4caf50"/>
+  <circle cx="650" cy="80" r="40" fill="#ffeb3b"/>
+  <path d="M200 180l60-100 50 60 40-40 60 80H200z" fill="#388e3c"/>
+  <path d="M350 180l80-120 60 70 50-50 80 100H350z" fill="#2e7d32"/>
+  <text x="400" y="260" text-anchor="middle" font-family="Arial" font-size="28" fill="#1b5e20" font-weight="bold">户外运动，健康生活</text>
+</svg>

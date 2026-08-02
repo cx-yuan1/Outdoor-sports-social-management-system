@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+    <style>
+        .login-page {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image: url('https://images.unsplash.com/photo-1551632811-561732d1e306?w=1920');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            position: relative;
+        }
+        .login-page::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        .login-box {
+            width: 400px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            padding: 40px;
+            position: relative;
+            z-index: 1;
+        }
+        .login-title {
+            text-align: center;
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 30px;
+        }
+        .login-box .form-group {
+            margin-bottom: 20px;
+        }
+        .login-box .btn {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+        }
+        .login-footer {
+            text-align: center;
+            margin-top: 20px;
+            color: var(--text-secondary);
+        }
+        .login-footer a {
+            color: var(--primary-color);
+        }
+        /* 端选择样式 */
+        .role-selector {
+            display: flex;
+            gap: 10px;
+        }
+        .role-option {
+            flex: 1;
+            padding: 10px 8px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #fafafa;
+        }
+        .role-option:hover {
+            border-color: #a5d6a7;
+            background: #f5f5f5;
+        }
+        .role-option.active {
+            border-color: var(--primary-color);
+            background: #e8f5e9;
+        }
+        .role-option .role-name {
+            font-size: 13px;
+            color: #666;
+        }
+        .role-option.active .role-name {
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-box">
+            <h1 class="login-title">系统登录</h1>
+            <form id="loginForm" onsubmit="return handleLogin(event)">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-input" id="username" placeholder="请输入用户名" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" class="form-input" id="password" placeholder="请输入密码" required>
+                </div>
+                <!-- 端选择 -->
+                <div class="form-group">
+                    <label class="form-label">登录身份</label>
+                    <div class="role-selector">
+                        <div class="role-option active" data-role="3" onclick="selectRole(this)">
+                            <div class="role-name">管理员</div>
+                        </div>
+                        <div class="role-option" data-role="2" onclick="selectRole(this)">
+                            <div class="role-name">组织者</div>
+                        </div>
+                        <div class="role-option" data-role="1" onclick="selectRole(this)">
+                            <div class="role-name">普通用户</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="loginRole" value="3">
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">登录</button>
+                </div>
+            </form>
+            <div class="login-footer">
+                还没有账号？<a href="/register">立即注册</a>
+            </div>
+            <div class="login-footer" style="margin-top: 10px;">
+                <a href="/">返回首页</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        // 选择登录身份
+        function selectRole(element) {
+            document.querySelectorAll('.role-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            element.classList.add('active');
+            document.getElementById('loginRole').value = element.dataset.role;
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const loginRole = parseInt(document.getElementById('loginRole').value);
+            
+            if (!username || !password) {
+                showMessage('请输入用户名和密码', 'error');
+                return false;
+            }
+            
+            const res = await post('/api/login', { username, password, loginRole });
+            
+            if (res && res.code === 200) {
+                showMessage('登录成功');
+                setTimeout(() => {
+                    // 根据选择的端跳转
+                    if (loginRole === 3) {
+                        window.location.href = '/admin';
+                    } else if (loginRole === 2) {
+                        window.location.href = '/organizer/center';
+                    } else {
+                        window.location.href = '/';
+                    }
+                }, 1000);
+            } else {
+                showMessage(res ? res.message : '登录失败', 'error');
+            }
+            
+            return false;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动态广场 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand">
+                <span>户外运动社交平台</span>
+            </a>
+            <ul class="navbar-menu">
+                <li><a href="/">首页</a></li>
+                <li><a href="/activities">活动</a></li>
+                <li><a href="/moments" class="active">动态</a></li>
+                <li><a href="/notices">公告</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser"></div>
+        </div>
+    </nav>
+
+    <div class="container" style="padding-top: 30px; max-width: 800px;">
+        <!-- 发布动态入口 -->
+        <div class="publish-box" id="publishBox" style="display: none;">
+            <div class="publish-header" onclick="openPublishModal()">
+                <img id="publishAvatar" src="/static/images/default-avatar.svg" class="avatar" alt="">
+                <div class="publish-input-placeholder">分享你的户外运动精彩瞬间...</div>
+                <button class="btn btn-primary">发布动态</button>
+            </div>
+        </div>
+
+        <!-- 动态列表 -->
+        <div id="momentList">
+            <div class="loading">加载中...</div>
+        </div>
+
+        <!-- 分页 -->
+        <div id="pagination"></div>
+    </div>
+
+    <!-- 发布动态弹窗 -->
+    <div class="modal-overlay" id="publishModal" style="display: none;">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <span class="modal-title">发布动态</span>
+                <span class="modal-close" onclick="closePublishModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <textarea class="form-input" id="momentContent" placeholder="分享你的户外运动精彩瞬间..." style="min-height: 120px; resize: vertical;"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">添加图片（最多9张）</label>
+                    <div class="image-upload-grid" id="imageUploadGrid">
+                        <div class="image-upload-item add-btn" onclick="document.getElementById('momentImages').click()">
+                            <span class="upload-icon">+</span>
+                            <span class="upload-text">添加图片</span>
+                        </div>
+                    </div>
+                    <input type="file" id="momentImages" accept="image/*" multiple style="display: none;" onchange="handleImageSelect(this)">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closePublishModal()">取消</button>
+                <button class="btn btn-primary" onclick="publishMoment()">发布</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="#">关于我们</a>
+                    <a href="#">联系方式</a>
+                </div>
+                <div class="footer-copyright">
+                    &copy; 2026 户外运动社交平台
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        let currentPage = 1;
+        const pageSize = 10;
+        let currentUser = null;
+        let uploadedImages = []; // 存储已上传的图片URL
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadMoments(1);
+        });
+
+        async function loadUserInfo() {
+            const res = await get('/api/current-user');
+            const container = document.getElementById('navbarUser');
+            const publishBox = document.getElementById('publishBox');
+            
+            if (res && res.code === 200 && res.data) {
+                currentUser = res.data;
+                container.innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${currentUser.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            ${currentUser.role >= 2 ? '<a href="/organizer/center">发起者中心</a>' : ''}
+                            ${currentUser.role === 3 ? '<a href="/admin">管理后台</a>' : ''}
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+                // 显示发布入口
+                publishBox.style.display = 'block';
+                document.getElementById('publishAvatar').src = currentUser.avatar || getDefaultAvatar();
+            } else {
+                container.innerHTML = `
+                    <a href="/login" class="btn btn-outline btn-small">登录</a>
+                    <a href="/register" class="btn btn-primary btn-small">注册</a>
+                `;
+                publishBox.style.display = 'none';
+            }
+        }
+
+        // 打开发布弹窗
+        function openPublishModal() {
+            if (!currentUser) {
+                showMessage('请先登录', 'warning');
+                window.location.href = '/login';
+                return;
+            }
+            document.getElementById('momentContent').value = '';
+            uploadedImages = [];
+            renderImageGrid();
+            document.getElementById('publishModal').style.display = 'flex';
+        }
+
+        // 关闭发布弹窗
+        function closePublishModal() {
+            document.getElementById('publishModal').style.display = 'none';
+        }
+
+        // 处理图片选择
+        async function handleImageSelect(input) {
+            if (!input.files || input.files.length === 0) return;
+            
+            const maxImages = 9;
+            const remainingSlots = maxImages - uploadedImages.length;
+            
+            if (remainingSlots <= 0) {
+                showMessage('最多只能上传9张图片', 'warning');
+                return;
+            }
+            
+            const filesToUpload = Array.from(input.files).slice(0, remainingSlots);
+            
+            for (const file of filesToUpload) {
+                // 检查文件大小（限制5MB）
+                if (file.size > 5 * 1024 * 1024) {
+                    showMessage(`图片 ${file.name} 超过5MB限制`, 'warning');
+                    continue;
+                }
+                
+                const url = await uploadFile(file);
+                if (url) {
+                    uploadedImages.push(url);
+                }
+            }
+            
+            renderImageGrid();
+            input.value = ''; // 清空input，允许重复选择同一文件
+        }
+
+        // 渲染图片网格
+        function renderImageGrid() {
+            const grid = document.getElementById('imageUploadGrid');
+            let html = '';
+            
+            // 已上传的图片
+            uploadedImages.forEach((url, index) => {
+                html += `
+                    <div class="image-upload-item has-image">
+                        <img src="${url}" alt="">
+                        <span class="image-delete-btn" onclick="removeImage(${index})">&times;</span>
+                    </div>
+                `;
+            });
+            
+            // 添加按钮（如果还没到9张）
+            if (uploadedImages.length < 9) {
+                html += `
+                    <div class="image-upload-item add-btn" onclick="document.getElementById('momentImages').click()">
+                        <span class="upload-icon">+</span>
+                        <span class="upload-text">添加图片</span>
+                    </div>
+                `;
+            }
+            
+            grid.innerHTML = html;
+        }
+
+        // 移除图片
+        function removeImage(index) {
+            uploadedImages.splice(index, 1);
+            renderImageGrid();
+        }
+
+        // 发布动态
+        async function publishMoment() {
+            const content = document.getElementById('momentContent').value.trim();
+            
+            if (!content && uploadedImages.length === 0) {
+                showMessage('请输入内容或添加图片', 'warning');
+                return;
+            }
+            
+            const data = {
+                content: content,
+                images: uploadedImages.join(',')
+            };
+            
+            const res = await post('/api/user/moment', data);
+            
+            if (res && res.code === 200) {
+                showMessage('发布成功');
+                closePublishModal();
+                loadMoments(1); // 刷新列表
+            } else {
+                showMessage(res ? res.message : '发布失败', 'error');
+            }
+        }
+
+        async function loadMoments(page) {
+            currentPage = page;
+            const res = await get(`/api/front/moments?page=${page}&size=${pageSize}`);
+            const container = document.getElementById('momentList');
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                
+                if (data.records.length === 0) {
+                    container.innerHTML = '<div class="empty">暂无动态</div>';
+                    document.getElementById('pagination').innerHTML = '';
+                    return;
+                }
+                
+                container.innerHTML = data.records.map(m => renderMomentCard(m)).join('');
+                
+                document.getElementById('pagination').innerHTML = renderPagination(
+                    data.current, data.total, pageSize, 'loadMoments'
+                );
+            } else {
+                container.innerHTML = '<div class="empty">加载失败</div>';
+            }
+        }
+
+        function renderMomentCard(moment) {
+            let imagesHtml = '';
+            if (moment.imageList && moment.imageList.length > 0) {
+                const imgClass = moment.imageList.length === 1 ? 'single' : '';
+                imagesHtml = `
+                    <div class="moment-images ${imgClass}">
+                        ${moment.imageList.map(img => `<img src="${getImageUrl(img)}" alt="" onclick="previewImage('${getImageUrl(img)}')">`).join('')}
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="moment-card">
+                    <div class="moment-header">
+                        <a href="/profile/${moment.userId}">
+                            <img src="${moment.userAvatar || getDefaultAvatar()}" class="avatar" alt="">
+                        </a>
+                        <div class="moment-user-info">
+                            <a href="/profile/${moment.userId}" class="moment-user-name">${moment.userName || '用户'}</a>
+                            <div class="moment-time">${timeAgo(moment.createdTime)}</div>
+                        </div>
+                    </div>
+                    <div class="moment-content">${moment.content || ''}</div>
+                    ${imagesHtml}
+                    ${moment.activityTitle ? `<div class="text-secondary" style="margin-bottom: 10px;">关联活动：${moment.activityTitle}</div>` : ''}
+                    <div class="moment-actions">
+                        <span class="moment-action ${moment.isLiked ? 'active' : ''}" onclick="toggleLike(${moment.id}, this)">
+                            ${moment.isLiked ? '已赞' : '点赞'} ${moment.likeCount || 0}
+                        </span>
+                        <span class="moment-action" onclick="toggleComments(${moment.id})">
+                            评论 ${moment.commentCount || 0}
+                        </span>
+                    </div>
+                    <div class="moment-comments" id="comments-${moment.id}" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                        <!-- 评论区 -->
+                    </div>
+                </div>
+            `;
+        }
+
+        async function toggleLike(momentId, el) {
+            if (!currentUser) {
+                showMessage('请先登录', 'warning');
+                return;
+            }
+            
+            const res = await post(`/api/user/moment/${momentId}/like`);
+            if (res && res.code === 200) {
+                const isLiked = res.data;
+                el.classList.toggle('active', isLiked);
+                
+                // 更新点赞数
+                const text = el.textContent.trim();
+                const count = parseInt(text.match(/\d+/)[0]) || 0;
+                el.textContent = (isLiked ? '已赞 ' : '点赞 ') + (isLiked ? count + 1 : count - 1);
+            }
+        }
+
+        async function toggleComments(momentId) {
+            const container = document.getElementById(`comments-${momentId}`);
+            
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                await loadComments(momentId);
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        async function loadComments(momentId) {
+            const container = document.getElementById(`comments-${momentId}`);
+            const res = await get(`/api/front/moment/${momentId}/comments`);
+            
+            if (res && res.code === 200) {
+                const comments = res.data;
+                
+                let html = `
+                    <div class="comment-input" style="margin-bottom: 15px;">
+                        <input type="text" class="form-input" id="comment-input-${momentId}" placeholder="写评论..." style="flex: 1;">
+                        <button class="btn btn-primary btn-small" style="margin-left: 10px;" onclick="submitComment(${momentId})">发送</button>
+                    </div>
+                `;
+                
+                if (comments.length === 0) {
+                    html += '<div class="text-secondary text-center">暂无评论</div>';
+                } else {
+                    html += comments.map(c => `
+                        <div style="padding: 10px 0; border-bottom: 1px solid var(--border-color);">
+                            <div class="flex gap-10" style="align-items: flex-start;">
+                                <img src="${c.userAvatar || getDefaultAvatar()}" class="avatar avatar-small" alt="">
+                                <div style="flex: 1;">
+                                    <span style="font-weight: 600;">${c.userName}</span>
+                                    ${c.replyUserName ? `<span class="text-secondary"> 回复 </span><span style="font-weight: 600;">${c.replyUserName}</span>` : ''}
+                                    <div style="margin-top: 5px;">${c.content}</div>
+                                    <div class="text-secondary text-small" style="margin-top: 5px;">${timeAgo(c.createdTime)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                
+                container.innerHTML = `<div class="flex" style="align-items: center;">${html.split('</div>')[0]}</div>${html.substring(html.indexOf('</div>') + 6)}`;
+                container.innerHTML = html;
+            }
+        }
+
+        async function submitComment(momentId) {
+            if (!currentUser) {
+                showMessage('请先登录', 'warning');
+                return;
+            }
+            
+            const input = document.getElementById(`comment-input-${momentId}`);
+            const content = input.value.trim();
+            
+            if (!content) {
+                showMessage('请输入评论内容', 'warning');
+                return;
+            }
+            
+            const res = await post('/api/user/comment', {
+                momentId: momentId,
+                content: content
+            });
+            
+            if (res && res.code === 200) {
+                showMessage('评论成功');
+                input.value = '';
+                await loadComments(momentId);
+                loadMoments(currentPage);
+            } else {
+                showMessage(res ? res.message : '评论失败', 'error');
+            }
+        }
+
+        function previewImage(url) {
+            window.open(url, '_blank');
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>

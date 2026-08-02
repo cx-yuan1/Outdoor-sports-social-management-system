@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand">
+                <span>户外运动社交平台</span>
+            </a>
+            <ul class="navbar-menu">
+                <li><a href="/" class="active">首页</a></li>
+                <li><a href="/activities">活动</a></li>
+                <li><a href="/moments">动态</a></li>
+                <li><a href="/notices">公告</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser">
+                <!-- 动态加载 -->
+            </div>
+        </div>
+    </nav>
+
+    <!-- 轮播图 -->
+    <div class="banner" id="banner">
+        <div class="banner-slides" id="bannerSlides">
+            <!-- 动态加载 -->
+        </div>
+        <div class="banner-dots" id="bannerDots"></div>
+        <div class="banner-arrow prev" onclick="prevSlide()">&lt;</div>
+        <div class="banner-arrow next" onclick="nextSlide()">&gt;</div>
+    </div>
+
+    <!-- 主内容 -->
+    <div class="container">
+        <!-- 分类导航 -->
+        <section class="home-section">
+            <div class="section-header">
+                <h2 class="section-title">活动分类</h2>
+            </div>
+            <div class="category-nav" id="categoryNav">
+                <!-- 动态加载 -->
+            </div>
+        </section>
+
+        <!-- 公告 -->
+        <section class="home-section">
+            <div class="section-header">
+                <h2 class="section-title">平台公告</h2>
+                <a href="/notices" class="section-more">查看更多 &gt;</a>
+            </div>
+            <div class="notice-list" id="noticeList">
+                <!-- 动态加载 -->
+            </div>
+        </section>
+
+        <!-- 热门活动 -->
+        <section class="home-section">
+            <div class="section-header">
+                <h2 class="section-title">热门活动</h2>
+                <a href="/activities" class="section-more">查看更多 &gt;</a>
+            </div>
+            <div class="activity-grid" id="activityGrid">
+                <!-- 动态加载 -->
+            </div>
+        </section>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="#">关于我们</a>
+                    <a href="#">联系方式</a>
+                    <a href="#">用户协议</a>
+                    <a href="#">隐私政策</a>
+                </div>
+                <div class="footer-copyright">
+                    &copy; 2026 户外运动社交平台 All Rights Reserved
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        let currentSlide = 0;
+        let slideCount = 0;
+        let slideTimer = null;
+
+        // 页面加载
+        document.addEventListener('DOMContentLoaded', function() {
+            loadHomeData();
+            loadUserInfo();
+        });
+
+        // 加载首页数据
+        async function loadHomeData() {
+            const res = await get('/api/front/home');
+            if (res && res.code === 200) {
+                const data = res.data;
+                renderBanners(data.banners);
+                renderCategories(data.categories);
+                renderNotices(data.notices);
+                renderActivities(data.hotActivities);
+            }
+        }
+
+        // 加载用户信息
+        async function loadUserInfo() {
+            const res = await get('/api/current-user');
+            const container = document.getElementById('navbarUser');
+            
+            if (res && res.code === 200 && res.data) {
+                const user = res.data;
+                container.innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${user.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            ${user.role >= 2 ? '<a href="/organizer/center">发起者中心</a>' : ''}
+                            ${user.role === 3 ? '<a href="/admin">管理后台</a>' : ''}
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <a href="/login" class="btn btn-outline btn-small">登录</a>
+                    <a href="/register" class="btn btn-primary btn-small">注册</a>
+                `;
+            }
+        }
+
+        // 渲染轮播图
+        function renderBanners(banners) {
+            const slides = document.getElementById('bannerSlides');
+            const dots = document.getElementById('bannerDots');
+            
+            if (!banners || banners.length === 0) {
+                slides.innerHTML = '<div class="banner-slide"><img src="/static/images/default-banner.jpg" alt=""></div>';
+                return;
+            }
+            
+            slideCount = banners.length;
+            slides.innerHTML = banners.map(b => `
+                <div class="banner-slide">
+                    <img src="${getImageUrl(b.image)}" alt="${b.title || ''}">
+                </div>
+            `).join('');
+            
+            dots.innerHTML = banners.map((_, i) => `
+                <div class="banner-dot ${i === 0 ? 'active' : ''}" onclick="goToSlide(${i})"></div>
+            `).join('');
+            
+            // 自动轮播
+            startAutoSlide();
+        }
+
+        function startAutoSlide() {
+            if (slideTimer) clearInterval(slideTimer);
+            slideTimer = setInterval(nextSlide, 5000);
+        }
+
+        function goToSlide(index) {
+            currentSlide = index;
+            updateSlide();
+            startAutoSlide();
+        }
+
+        function prevSlide() {
+            currentSlide = (currentSlide - 1 + slideCount) % slideCount;
+            updateSlide();
+            startAutoSlide();
+        }
+
+        function nextSlide() {
+            currentSlide = (currentSlide + 1) % slideCount;
+            updateSlide();
+        }
+
+        function updateSlide() {
+            const slides = document.getElementById('bannerSlides');
+            const dots = document.querySelectorAll('.banner-dot');
+            
+            slides.style.transform = `translateX(-${currentSlide * 100}%)`;
+            dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === currentSlide);
+            });
+        }
+
+        // 渲染分类
+        function renderCategories(categories) {
+            const container = document.getElementById('categoryNav');
+            if (!categories || categories.length === 0) {
+                container.innerHTML = '<div class="empty">暂无分类</div>';
+                return;
+            }
+            
+            container.innerHTML = categories.map(c => `
+                <a href="/activities?categoryId=${c.id}" class="category-item">
+                    <img src="${c.icon || '/static/images/category-default.png'}" alt="">
+                    <span>${c.name}</span>
+                </a>
+            `).join('');
+        }
+
+        // 渲染公告
+        function renderNotices(notices) {
+            const container = document.getElementById('noticeList');
+            if (!notices || notices.length === 0) {
+                container.innerHTML = '<div class="empty">暂无公告</div>';
+                return;
+            }
+            
+            container.innerHTML = notices.map(n => `
+                <a href="/notice/${n.id}" class="notice-item">
+                    <span class="notice-tag ${n.type === 2 ? 'important' : 'normal'}">${n.type === 2 ? '重要' : '公告'}</span>
+                    <span class="notice-title">${n.title}</span>
+                    <span class="notice-date">${formatDate(n.createdTime)}</span>
+                </a>
+            `).join('');
+        }
+
+        // 渲染活动
+        function renderActivities(activities) {
+            const container = document.getElementById('activityGrid');
+            if (!activities || activities.length === 0) {
+                container.innerHTML = '<div class="empty">暂无活动</div>';
+                return;
+            }
+            
+            container.innerHTML = activities.map(a => `
+                <a href="/activity/${a.id}" class="activity-card">
+                    <div class="activity-card-cover">
+                        <img src="${getImageUrl(a.coverImage)}" alt="">
+                    </div>
+                    <div class="activity-card-body">
+                        <h3 class="activity-card-title">${a.title}</h3>
+                        <p class="activity-card-info">${a.location || '地点待定'}</p>
+                        <p class="activity-card-info">${formatDateTime(a.startTime)}</p>
+                        <div class="activity-card-footer">
+                            <span class="activity-card-price">${a.fee > 0 ? '¥' + a.fee : '免费'}</span>
+                            <span class="text-secondary">${a.currentParticipants || 0}人已报名</span>
+                        </div>
+                    </div>
+                </a>
+            `).join('');
+        }
+
+        // 退出登录
+        async function logout() {
+            await post('/api/logout');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>

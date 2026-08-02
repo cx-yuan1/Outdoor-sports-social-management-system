@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" fill="none">
+  <rect width="400" height="300" fill="#e3f2fd"/>
+  <rect y="220" width="400" height="80" fill="#90caf9"/>
+  <path d="M0 220h400" stroke="#64b5f6" stroke-width="4"/>
+  <circle cx="120" cy="180" r="40" stroke="#1976d2" stroke-width="6" fill="none"/>
+  <circle cx="280" cy="180" r="40" stroke="#1976d2" stroke-width="6" fill="none"/>
+  <path d="M120 180l60-80h40l25 40-45 40H120z" stroke="#1976d2" stroke-width="4" fill="none"/>
+  <path d="M180 100l100 80" stroke="#1976d2" stroke-width="4"/>
+  <circle cx="180" cy="85" r="18" fill="#1976d2"/>
+  <text x="200" y="280" text-anchor="middle" font-family="Arial" font-size="20" fill="#1565c0" font-weight="bold">环城骑行</text>
+</svg>

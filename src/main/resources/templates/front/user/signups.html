@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的报名 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+    <style>
+        .user-layout { display: flex; gap: 20px; padding: 30px 0; }
+        .user-sidebar { width: 200px; }
+        .user-main { flex: 1; }
+        .user-menu { background: #fff; border-radius: 8px; overflow: hidden; }
+        .user-menu a { display: block; padding: 15px 20px; color: var(--text-color); border-left: 3px solid transparent; }
+        .user-menu a:hover, .user-menu a.active { background: #e8f5e9; color: var(--primary-color); border-left-color: var(--primary-color); }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand"><span>户外运动社交平台</span></a>
+            <ul class="navbar-menu">
+                <li><a href="/">首页</a></li>
+                <li><a href="/activities">活动</a></li>
+                <li><a href="/moments">动态</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser"></div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="user-layout">
+            <aside class="user-sidebar">
+                <nav class="user-menu">
+                    <a href="/user/center">个人资料</a>
+                    <a href="/user/signups" class="active">我的报名</a>
+                    <a href="/user/moments">我的动态</a>
+                    <a href="/user/messages">我的消息</a>
+                </nav>
+            </aside>
+
+            <main class="user-main">
+                <div class="card">
+                    <div class="flex-between mb-20">
+                        <h3 class="card-title" style="margin: 0; border: none; padding: 0;">我的报名</h3>
+                        <select id="statusFilter" class="form-input" style="width: 120px;" onchange="loadSignups(1)">
+                            <option value="">全部状态</option>
+                            <option value="0">待审核</option>
+                            <option value="1">已通过</option>
+                            <option value="2">已拒绝</option>
+                            <option value="3">已取消</option>
+                        </select>
+                    </div>
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>活动名称</th>
+                                <th>报名时间</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr><td colspan="4" class="loading">加载中...</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div id="pagination"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        let currentPage = 1;
+        const pageSize = 10;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadSignups(1);
+        });
+
+        async function loadUserInfo() {
+            const res = await get('/api/current-user');
+            if (res && res.code === 200 && res.data) {
+                const user = res.data;
+                document.getElementById('navbarUser').innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${user.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            ${user.role >= 2 ? '<a href="/organizer/center">发起者中心</a>' : ''}
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                window.location.href = '/login';
+            }
+        }
+
+        async function loadSignups(page) {
+            currentPage = page;
+            const status = document.getElementById('statusFilter').value;
+            
+            let url = `/api/user/signups?page=${page}&size=${pageSize}`;
+            if (status) url += `&status=${status}`;
+            
+            const res = await get(url);
+            const tbody = document.getElementById('tableBody');
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                
+                if (data.records.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="empty">暂无报名记录</td></tr>';
+                    document.getElementById('pagination').innerHTML = '';
+                    return;
+                }
+                
+                tbody.innerHTML = data.records.map(s => {
+                    const canCancel = s.status === 0 || s.status === 1;
+                    return `
+                        <tr>
+                            <td><a href="/activity/${s.activityId}">${s.activityTitle || '-'}</a></td>
+                            <td>${formatDateTime(s.createdTime)}</td>
+                            <td><span class="status-tag ${getSignupStatusClass(s.status)}">${getSignupStatusText(s.status)}</span></td>
+                            <td>
+                                ${canCancel ? `<button class="btn btn-danger btn-small" onclick="cancelSignup(${s.activityId})">取消报名</button>` : '-'}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                document.getElementById('pagination').innerHTML = renderPagination(
+                    data.current, data.total, pageSize, 'loadSignups'
+                );
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty">加载失败</td></tr>';
+            }
+        }
+
+        function getSignupStatusClass(status) {
+            const classMap = {0: 'status-pending', 1: 'status-approved', 2: 'status-rejected', 3: 'status-disabled'};
+            return classMap[status] || '';
+        }
+
+        async function cancelSignup(activityId) {
+            if (!confirm('确定要取消报名吗？')) return;
+            
+            const res = await del(`/api/user/signup/${activityId}`);
+            if (res && res.code === 200) {
+                showMessage('已取消报名');
+                loadSignups(currentPage);
+            } else {
+                showMessage(res ? res.message : '操作失败', 'error');
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

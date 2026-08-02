@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" fill="none">
+  <rect width="400" height="300" fill="#e8f5e9"/>
+  <path d="M0 200l100-80 80 40 100-100 120 140H0z" fill="#66bb6a"/>
+  <path d="M0 250l150-60 100 30 150-70v150H0z" fill="#43a047"/>
+  <circle cx="320" cy="60" r="30" fill="#ffeb3b"/>
+  <path d="M180 180l30-50 25 30 20-25 35 45H180z" fill="#2e7d32"/>
+  <text x="200" y="280" text-anchor="middle" font-family="Arial" font-size="20" fill="#1b5e20" font-weight="bold">香山徒步</text>
+</svg>

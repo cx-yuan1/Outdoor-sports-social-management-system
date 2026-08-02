@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活动详情 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+    <style>
+        .detail-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            padding: 30px 0;
+        }
+        .detail-cover {
+            width: 100%;
+            height: 400px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        .detail-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 20px 0 15px;
+        }
+        .detail-meta {
+            display: flex;
+            gap: 20px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+        .detail-info-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .detail-info-label {
+            width: 80px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+        .detail-info-value {
+            flex: 1;
+        }
+        .detail-desc {
+            line-height: 1.8;
+            color: var(--text-color);
+            white-space: pre-wrap;
+        }
+        .sidebar-card {
+            position: sticky;
+            top: 80px;
+        }
+        .organizer-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .organizer-name {
+            font-weight: 600;
+        }
+        .price-box {
+            text-align: center;
+            padding: 20px 0;
+        }
+        .price-value {
+            font-size: 32px;
+            font-weight: 600;
+            color: var(--danger-color);
+        }
+        .price-value span {
+            font-size: 16px;
+        }
+        .signup-btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            margin-top: 15px;
+        }
+        .signup-status {
+            text-align: center;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 4px;
+            color: var(--success-color);
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand">
+                <span>户外运动社交平台</span>
+            </a>
+            <ul class="navbar-menu">
+                <li><a href="/">首页</a></li>
+                <li><a href="/activities" class="active">活动</a></li>
+                <li><a href="/moments">动态</a></li>
+                <li><a href="/notices">公告</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser"></div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="detail-container">
+            <!-- 左侧详情 -->
+            <div class="detail-main">
+                <div class="card" id="activityDetail">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+
+            <!-- 右侧边栏 -->
+            <div class="detail-sidebar">
+                <div class="card sidebar-card" id="sidebarCard">
+                    <!-- 动态加载 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 报名弹窗 -->
+    <div class="modal-overlay" id="signupModal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">报名活动</span>
+                <span class="modal-close" onclick="closeSignupModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">报名备注（选填）</label>
+                    <textarea class="form-input form-textarea" id="signupRemark" placeholder="可以填写您的联系方式或其他备注信息"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeSignupModal()">取消</button>
+                <button class="btn btn-primary" onclick="submitSignup()">确认报名</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        let activityData = null;
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadActivityDetail();
+        });
+
+        async function loadUserInfo() {
+            const res = await get('/api/current-user');
+            const container = document.getElementById('navbarUser');
+            
+            if (res && res.code === 200 && res.data) {
+                currentUser = res.data;
+                container.innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${currentUser.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            ${currentUser.role >= 2 ? '<a href="/organizer/center">发起者中心</a>' : ''}
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <a href="/login" class="btn btn-outline btn-small">登录</a>
+                    <a href="/register" class="btn btn-primary btn-small">注册</a>
+                `;
+            }
+        }
+
+        async function loadActivityDetail() {
+            const id = getPathId();
+            if (!id) {
+                showMessage('活动不存在', 'error');
+                return;
+            }
+
+            const res = await get(`/api/front/activity/${id}`);
+            
+            if (res && res.code === 200) {
+                activityData = res.data;
+                renderDetail(activityData);
+                renderSidebar(activityData);
+                document.title = activityData.title + ' - 户外运动社交平台';
+            } else {
+                document.getElementById('activityDetail').innerHTML = '<div class="empty">活动不存在或已删除</div>';
+            }
+        }
+
+        function renderDetail(activity) {
+            const container = document.getElementById('activityDetail');
+            container.innerHTML = `
+                <img src="${getImageUrl(activity.coverImage)}" class="detail-cover" alt="">
+                <h1 class="detail-title">${activity.title}</h1>
+                <div class="detail-meta">
+                    <span>分类：${activity.categoryName || '未分类'}</span>
+                    <span>浏览：${activity.viewCount || 0}</span>
+                    <span>发布：${formatDateTime(activity.createdTime)}</span>
+                </div>
+                
+                <div class="detail-info-item">
+                    <span class="detail-info-label">活动时间</span>
+                    <span class="detail-info-value">${formatDateTime(activity.startTime)} ~ ${formatDateTime(activity.endTime)}</span>
+                </div>
+                <div class="detail-info-item">
+                    <span class="detail-info-label">活动地点</span>
+                    <span class="detail-info-value">${activity.location || '待定'}</span>
+                </div>
+                <div class="detail-info-item">
+                    <span class="detail-info-label">报名截止</span>
+                    <span class="detail-info-value">${formatDateTime(activity.signupDeadline) || '不限'}</span>
+                </div>
+                <div class="detail-info-item">
+                    <span class="detail-info-label">人数限制</span>
+                    <span class="detail-info-value">${activity.maxParticipants > 0 ? activity.maxParticipants + '人' : '不限'}</span>
+                </div>
+                <div class="detail-info-item">
+                    <span class="detail-info-label">联系电话</span>
+                    <span class="detail-info-value">${activity.contactPhone || '-'}</span>
+                </div>
+                ${activity.requirements ? `
+                <div class="detail-info-item">
+                    <span class="detail-info-label">参与要求</span>
+                    <span class="detail-info-value">${activity.requirements}</span>
+                </div>
+                ` : ''}
+                
+                <h3 style="margin: 25px 0 15px;">活动详情</h3>
+                <div class="detail-desc">${activity.description || '暂无详情'}</div>
+            `;
+        }
+
+        function renderSidebar(activity) {
+            const container = document.getElementById('sidebarCard');
+            
+            let signupHtml = '';
+            if (activity.isSignedUp) {
+                const statusText = getSignupStatusText(activity.signupStatus);
+                signupHtml = `<div class="signup-status">您已报名（${statusText}）</div>`;
+                if (activity.signupStatus === 0 || activity.signupStatus === 1) {
+                    signupHtml += `<button class="btn btn-outline signup-btn" onclick="cancelSignup()">取消报名</button>`;
+                }
+            } else {
+                signupHtml = `<button class="btn btn-primary signup-btn" onclick="openSignupModal()">立即报名</button>`;
+            }
+            
+            container.innerHTML = `
+                <div class="organizer-info">
+                    <img src="${activity.organizerAvatar || getDefaultAvatar()}" class="avatar" alt="">
+                    <div>
+                        <div class="organizer-name">${activity.organizerName || '发起者'}</div>
+                        <div class="text-secondary text-small">活动发起者</div>
+                    </div>
+                </div>
+                
+                <div class="price-box">
+                    <div class="price-value">${activity.fee > 0 ? '<span>¥</span>' + activity.fee : '免费'}</div>
+                    <div class="text-secondary mt-10">${activity.currentParticipants || 0}人已报名</div>
+                </div>
+                
+                ${signupHtml}
+            `;
+        }
+
+        function openSignupModal() {
+            if (!currentUser) {
+                showMessage('请先登录', 'warning');
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 1500);
+                return;
+            }
+            document.getElementById('signupModal').style.display = 'flex';
+        }
+
+        function closeSignupModal() {
+            document.getElementById('signupModal').style.display = 'none';
+        }
+
+        async function submitSignup() {
+            const remark = document.getElementById('signupRemark').value.trim();
+            
+            const res = await post('/api/user/signup', {
+                activityId: activityData.id,
+                remark: remark
+            });
+            
+            if (res && res.code === 200) {
+                showMessage('报名成功，等待审核');
+                closeSignupModal();
+                loadActivityDetail();
+            } else {
+                showMessage(res ? res.message : '报名失败', 'error');
+            }
+        }
+
+        async function cancelSignup() {
+            if (!confirm('确定要取消报名吗？')) return;
+            
+            const res = await del(`/api/user/signup/${activityData.id}`);
+            
+            if (res && res.code === 200) {
+                showMessage('已取消报名');
+                loadActivityDetail();
+            } else {
+                showMessage(res ? res.message : '操作失败', 'error');
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>

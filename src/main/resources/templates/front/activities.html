@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活动列表 - 户外运动社交平台</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/front.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand">
+                <span>户外运动社交平台</span>
+            </a>
+            <ul class="navbar-menu">
+                <li><a href="/">首页</a></li>
+                <li><a href="/activities" class="active">活动</a></li>
+                <li><a href="/moments">动态</a></li>
+                <li><a href="/notices">公告</a></li>
+            </ul>
+            <div class="navbar-user" id="navbarUser"></div>
+        </div>
+    </nav>
+
+    <div class="container" style="padding-top: 30px;">
+        <!-- 筛选栏 -->
+        <div class="card">
+            <div class="flex gap-20" style="flex-wrap: wrap; align-items: center;">
+                <div class="flex gap-10" style="align-items: center;">
+                    <span>分类：</span>
+                    <select id="categoryFilter" class="form-input" style="width: 150px;" onchange="loadActivities(1)">
+                        <option value="">全部分类</option>
+                    </select>
+                </div>
+                <div class="flex gap-10" style="align-items: center; flex: 1;">
+                    <input type="text" class="form-input" id="keyword" placeholder="搜索活动名称或地点" style="width: 250px;">
+                    <button class="btn btn-primary" onclick="loadActivities(1)">搜索</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 活动列表 -->
+        <div class="activity-grid" id="activityGrid">
+            <div class="loading">加载中...</div>
+        </div>
+
+        <!-- 分页 -->
+        <div id="pagination"></div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="#">关于我们</a>
+                    <a href="#">联系方式</a>
+                </div>
+                <div class="footer-copyright">
+                    &copy; 2026 户外运动社交平台
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/static/js/common.js"></script>
+    <script>
+        let currentPage = 1;
+        const pageSize = 9;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadCategories();
+            
+            // 从URL获取分类参数
+            const categoryId = getUrlParam('categoryId');
+            if (categoryId) {
+                document.getElementById('categoryFilter').value = categoryId;
+            }
+            
+            loadActivities(1);
+            
+            // 回车搜索
+            document.getElementById('keyword').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    loadActivities(1);
+                }
+            });
+        });
+
+        async function loadUserInfo() {
+            const res = await get('/api/current-user');
+            const container = document.getElementById('navbarUser');
+            
+            if (res && res.code === 200 && res.data) {
+                const user = res.data;
+                container.innerHTML = `
+                    <div class="user-dropdown">
+                        <img src="${user.avatar || getDefaultAvatar()}" class="avatar" alt="">
+                        <div class="user-dropdown-menu">
+                            <a href="/user/center">个人中心</a>
+                            ${user.role >= 2 ? '<a href="/organizer/center">发起者中心</a>' : ''}
+                            <a href="javascript:logout()">退出登录</a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <a href="/login" class="btn btn-outline btn-small">登录</a>
+                    <a href="/register" class="btn btn-primary btn-small">注册</a>
+                `;
+            }
+        }
+
+        async function loadCategories() {
+            const res = await get('/api/front/categories');
+            if (res && res.code === 200) {
+                const select = document.getElementById('categoryFilter');
+                res.data.forEach(c => {
+                    const option = document.createElement('option');
+                    option.value = c.id;
+                    option.textContent = c.name;
+                    select.appendChild(option);
+                });
+                
+                // 恢复URL中的分类选择
+                const categoryId = getUrlParam('categoryId');
+                if (categoryId) {
+                    select.value = categoryId;
+                }
+            }
+        }
+
+        async function loadActivities(page) {
+            currentPage = page;
+            const categoryId = document.getElementById('categoryFilter').value;
+            const keyword = document.getElementById('keyword').value.trim();
+            
+            let url = `/api/front/activities?page=${page}&size=${pageSize}`;
+            if (categoryId) url += `&categoryId=${categoryId}`;
+            if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`;
+            
+            const res = await get(url);
+            const container = document.getElementById('activityGrid');
+            
+            if (res && res.code === 200) {
+                const data = res.data;
+                
+                if (data.records.length === 0) {
+                    container.innerHTML = '<div class="empty" style="grid-column: 1/-1;">暂无活动</div>';
+                    document.getElementById('pagination').innerHTML = '';
+                    return;
+                }
+                
+                container.innerHTML = data.records.map(a => `
+                    <a href="/activity/${a.id}" class="activity-card">
+                        <div class="activity-card-cover">
+                            <img src="${getImageUrl(a.coverImage)}" alt="">
+                        </div>
+                        <div class="activity-card-body">
+                            <h3 class="activity-card-title">${a.title}</h3>
+                            <p class="activity-card-info">${a.location || '地点待定'}</p>
+                            <p class="activity-card-info">${formatDateTime(a.startTime)}</p>
+                            <div class="activity-card-footer">
+                                <span class="activity-card-price">${a.fee > 0 ? '¥' + a.fee : '免费'}</span>
+                                <span class="text-secondary">${a.currentParticipants || 0}人已报名</span>
+                            </div>
+                        </div>
+                    </a>
+                `).join('');
+                
+                // 分页
+                document.getElementById('pagination').innerHTML = renderPagination(
+                    data.current, data.total, pageSize, 'loadActivities'
+                );
+            } else {
+                container.innerHTML = '<div class="empty" style="grid-column: 1/-1;">加载失败</div>';
+            }
+        }
+
+        async function logout() {
+            await post('/api/logout');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>
