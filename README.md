@@ -176,7 +176,7 @@ hwyd
 
 #### 项目截图
 
-项目运行后可查看以下页面效果，图片后续放入 `images` 目录即可：
+项目运行后可查看以下页面效果：
 
 ![img.png](images/img.png)
 ![img_1.png](images/img_1.png)
