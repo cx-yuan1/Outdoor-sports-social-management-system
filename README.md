@@ -2,7 +2,7 @@
 
 # 获取方式---本文件是项目的部分文件，有需要可看【煮页】
 
-# 联系🐧: 3660038549
+# 联系🐧: 3660038549（毕业设计-论文）
 
 <br>
 
@@ -67,73 +67,6 @@ IDEA 编译器：推荐使用 IntelliJ IDEA 导入项目
 8、实现社区动态功能，包括动态发布、动态列表、动态点赞、动态评论、关注用户和私信聊天；
 
 9、实现后台运营管理，包括用户管理、活动审核、动态审核、公告管理、轮播图管理和数据统计。
-
-#### 前台启动方式
-
-1. 本项目无独立前端工程，前台页面位于 `src/main/resources/templates/front`。
-
-2. 前台静态资源位于 `src/main/resources/static`。
-
-3. 完成“后台启动方式”中的数据库导入、配置修改和 SpringBoot 项目启动。
-
-4. 浏览器访问：`http://localhost:8080/`
-
-说明：前台页面由 Thymeleaf 模板渲染，请求接口统一由本项目 SpringBoot 服务提供，无需额外启动 Vite、Vue 或 Nginx 代理。
-
-#### 后台启动方式
-
-1. 创建数据库 `outdoor_sports`。
-
-2. 导入项目根目录下的 `outdoor_sports.sql`。
-
-3. 修改 `src/main/resources/application.yml` 中的 MySQL 连接配置：
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/outdoor_sports?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: 123456
-```
-
-4. 使用 IDEA 打开项目，等待 Maven 依赖下载完成。
-
-5. 启动 `src/main/java/com/outdoor/OutdoorApplication.java`。
-
-6. 浏览器访问：`http://localhost:8080/admin`
-
-也可以在项目根目录使用 Maven 命令启动：
-
-```bash
-mvn spring-boot:run
-```
-
-也可以先打包再运行：
-
-```bash
-mvn clean package -DskipTests
-java -jar target/hwyd-1.0.0.jar
-```
-
-#### 默认后台账户密码
-
-[管理员]
-
-账号：`admin`
-
-密码：`123456`
-
-[活动发起者]
-
-账号：`organizer1`
-
-密码：`123456`
-
-[普通用户]
-
-账号：`user1`
-
-密码：`123456`
 
 #### 核心模块
 
